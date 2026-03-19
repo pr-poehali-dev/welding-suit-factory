@@ -1,0 +1,1 @@
+UPDATE t_p87775074_welding_suit_factory.products SET is_active = true WHERE id = 2;

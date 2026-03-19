@@ -211,6 +211,8 @@ def handler(event: dict, context) -> dict:
             return ok({"ok": True})
 
         # Создать товар (action == "create" или не указан)
+        if not body.get("name", "").strip():
+            return {"statusCode": 400, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps({"error": "name required"})}
         conn = get_conn()
         cur  = conn.cursor()
         gtin = body.get("gtin", "")
