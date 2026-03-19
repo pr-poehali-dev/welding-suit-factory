@@ -6,6 +6,26 @@ import Icon from "@/components/ui/icon";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
+type StockStatus = "in_stock" | "few" | "low" | "on_order";
+
+const STOCK_MAP: Record<StockStatus, { label: string; color: string }> = {
+  in_stock: { label: "В наличии",  color: "#4ade80" },
+  few:      { label: "Мало",       color: "#facc15" },
+  low:      { label: "Под заказ",  color: "#f87171" },
+  on_order: { label: "Много",      color: "#60a5fa" },
+};
+
+function StockBadge({ status }: { status: StockStatus }) {
+  const s = STOCK_MAP[status] ?? STOCK_MAP.in_stock;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{ background: `${s.color}18`, color: s.color, border: `1px solid ${s.color}40` }}>
+      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.color }} />
+      {s.label}
+    </span>
+  );
+}
+
 interface ApiProduct {
   id: number;
   name: string;
@@ -17,6 +37,7 @@ interface ApiProduct {
   image_url: string | null;
   is_active: boolean;
   sort_order: number;
+  stock_status: StockStatus;
 }
 
 interface CatalogSectionProps {
@@ -189,6 +210,9 @@ export default function CatalogSection({
                                   <option key={s} value={s}>{s}{SIZE_SURCHARGE[s] > 0 ? ` (+${SIZE_SURCHARGE[s] * 100}%)` : ""}</option>
                                 ))}
                               </select>
+                            </div>
+                            <div className="mb-3">
+                              <StockBadge status={p.stock_status ?? "in_stock"} />
                             </div>
                             <div className="flex items-center justify-between py-3" style={{ borderTop: "1px solid rgba(245,124,0,0.1)" }}>
                               <div>

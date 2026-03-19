@@ -4,6 +4,25 @@ import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
+const STOCK_OPTIONS = [
+  { value: "in_stock", label: "В наличии",  color: "#4ade80" },
+  { value: "few",      label: "Мало",       color: "#facc15" },
+  { value: "low",      label: "Под заказ",  color: "#f87171" },
+  { value: "on_order", label: "Много",      color: "#60a5fa" },
+] as const;
+
+type StockStatus = typeof STOCK_OPTIONS[number]["value"];
+
+function StockBadge({ status }: { status: StockStatus }) {
+  const opt = STOCK_OPTIONS.find(o => o.value === status) ?? STOCK_OPTIONS[0];
+  return (
+    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{ background: `${opt.color}18`, color: opt.color, border: `1px solid ${opt.color}40` }}>
+      {opt.label}
+    </span>
+  );
+}
+
 interface Product {
   id: number;
   name: string;
@@ -15,6 +34,7 @@ interface Product {
   image_url: string | null;
   is_active: boolean;
   sort_order: number;
+  stock_status: StockStatus;
 }
 
 const emptyForm = (): Omit<Product, "id"> => ({
@@ -27,6 +47,7 @@ const emptyForm = (): Omit<Product, "id"> => ({
   image_url: null,
   is_active: true,
   sort_order: 0,
+  stock_status: "in_stock",
 });
 
 export default function Admin() {
@@ -73,6 +94,7 @@ export default function Admin() {
       image_url: p.image_url,
       is_active: p.is_active,
       sort_order: p.sort_order,
+      stock_status: p.stock_status ?? "in_stock",
     });
     setShowForm(true);
   };
@@ -183,10 +205,10 @@ export default function Admin() {
             {/* Шапка таблицы */}
             <div className="grid grid-cols-12 px-5 py-3 text-xs uppercase tracking-wider" style={{ background: "#13181f", color: "#8a9ab5", fontFamily: "'Oswald', sans-serif", borderBottom: "1px solid rgba(245,124,0,0.15)" }}>
               <div className="col-span-1">Фото</div>
-              <div className="col-span-4">Название</div>
+              <div className="col-span-3">Название</div>
               <div className="col-span-2">Категория</div>
               <div className="col-span-2 text-right">Цена</div>
-              <div className="col-span-1 text-center">Активен</div>
+              <div className="col-span-2 text-center">Остаток</div>
               <div className="col-span-2 text-right">Действия</div>
             </div>
 
@@ -206,22 +228,22 @@ export default function Admin() {
                 </div>
 
                 {/* Название */}
-                <div className="col-span-4">
+                <div className="col-span-3">
                   <div className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{p.name}</div>
                   {p.badge && <span className="text-xs px-1.5 py-0.5 rounded mt-0.5 inline-block" style={{ background: "rgba(245,124,0,0.15)", color: "#f57c00" }}>{p.badge}</span>}
                 </div>
 
                 {/* Категория */}
-                <div className="col-span-2 text-sm" style={{ color: "#8a9ab5" }}>{p.category}</div>
+                <div className="col-span-2 text-xs" style={{ color: "#8a9ab5" }}>{p.category}</div>
 
                 {/* Цена */}
                 <div className="col-span-2 text-right text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>
                   {p.base_price.toLocaleString("ru-RU")} ₽
                 </div>
 
-                {/* Активен */}
-                <div className="col-span-1 flex justify-center">
-                  <div className="w-2 h-2 rounded-full" style={{ background: p.is_active ? "#4ade80" : "#8a9ab5" }} />
+                {/* Остаток */}
+                <div className="col-span-2 flex justify-center">
+                  <StockBadge status={p.stock_status ?? "in_stock"} />
                 </div>
 
                 {/* Действия */}
@@ -324,6 +346,27 @@ export default function Admin() {
                 <div>
                   <div className="text-xs uppercase tracking-widest mb-2" style={labelStyle}>Порядок сортировки</div>
                   <input type="number" min={0} className={inp} style={inpStyle} value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))} />
+                </div>
+              </div>
+
+              {/* Остаток */}
+              <div>
+                <div className="text-xs uppercase tracking-widest mb-2" style={labelStyle}>Остаток на складе</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {STOCK_OPTIONS.map(opt => (
+                    <label key={opt.value} className="flex items-center gap-2 p-3 rounded cursor-pointer transition-all"
+                      style={{
+                        background: form.stock_status === opt.value ? `${opt.color}12` : "#0d1117",
+                        border: `1px solid ${form.stock_status === opt.value ? opt.color + "60" : "rgba(255,255,255,0.06)"}`,
+                      }}>
+                      <input type="radio" name="stock_status" value={opt.value} checked={form.stock_status === opt.value}
+                        onChange={() => setForm(f => ({ ...f, stock_status: opt.value }))}
+                        style={{ accentColor: opt.color }} />
+                      <span className="text-sm font-medium" style={{ color: form.stock_status === opt.value ? opt.color : "#8a9ab5" }}>
+                        {opt.label}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
 

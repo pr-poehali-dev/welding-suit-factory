@@ -68,11 +68,11 @@ def handler(event: dict, context) -> dict:
     # --- СПИСОК ТОВАРОВ ---
     if method == "GET":
         cur.execute(
-            f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order "
+            f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status "
             f"FROM {SCHEMA}.products ORDER BY sort_order, id"
         )
         rows = cur.fetchall()
-        cols = ["id", "name", "category", "description", "gost", "badge", "base_price", "image_url", "is_active", "sort_order"]
+        cols = ["id", "name", "category", "description", "gost", "badge", "base_price", "image_url", "is_active", "sort_order", "stock_status"]
         products = [dict(zip(cols, row)) for row in rows]
         conn.close()
         return {
@@ -85,8 +85,8 @@ def handler(event: dict, context) -> dict:
     if method == "POST":
         body = json.loads(event.get("body") or "{}")
         cur.execute(
-            f"""INSERT INTO {SCHEMA}.products (name, category, description, gost, badge, base_price, image_url, is_active, sort_order)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            f"""INSERT INTO {SCHEMA}.products (name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (
                 body.get("name", ""),
                 body.get("category", ""),
@@ -97,6 +97,7 @@ def handler(event: dict, context) -> dict:
                 body.get("image_url") or None,
                 bool(body.get("is_active", True)),
                 int(body.get("sort_order", 0)),
+                body.get("stock_status", "in_stock"),
             ),
         )
         new_id = cur.fetchone()[0]
@@ -114,7 +115,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""UPDATE {SCHEMA}.products
                 SET name=%s, category=%s, description=%s, gost=%s, badge=%s,
-                    base_price=%s, image_url=%s, is_active=%s, sort_order=%s, updated_at=NOW()
+                    base_price=%s, image_url=%s, is_active=%s, sort_order=%s, stock_status=%s, updated_at=NOW()
                 WHERE id=%s""",
             (
                 body.get("name", ""),
@@ -126,6 +127,7 @@ def handler(event: dict, context) -> dict:
                 body.get("image_url") or None,
                 bool(body.get("is_active", True)),
                 int(body.get("sort_order", 0)),
+                body.get("stock_status", "in_stock"),
                 int(body["id"]),
             ),
         )
