@@ -327,50 +327,53 @@ export default function AdminProductForm({
                 </button>
               </div>
 
-              <div className="grid grid-cols-12 gap-2 px-3 py-2 mb-1 text-xs uppercase tracking-wider"
-                style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>
-                <div className="col-span-1 text-center">☑</div>
-                <div className="col-span-5">Размер / Рост</div>
-                <div className="col-span-4">Наценка, ₽</div>
-                <div className="col-span-2"></div>
+              <div className="grid gap-1 mb-1 px-2 text-xs uppercase tracking-wider" style={{ gridTemplateColumns: "28px 1fr 80px 110px 28px", color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>
+                <div className="text-center">☑</div>
+                <div>Размер / Рост</div>
+                <div>Наценка</div>
+                <div>GTIN</div>
+                <div></div>
               </div>
 
-              <div className="space-y-2">
-                {formSizes.map((sz, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center px-3 py-2 rounded"
-                    style={{
-                      background: sz.is_available ? "#0d1117" : "rgba(255,255,255,0.02)",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      opacity: sz.is_available ? 1 : 0.5,
-                    }}>
-                    <div className="col-span-1 flex justify-center">
-                      <input type="checkbox" checked={sz.is_available}
-                        onChange={e => updateSize(idx, "is_available", e.target.checked)}
-                        style={{ accentColor: "#f57c00", width: 15, height: 15, cursor: "pointer" }} />
-                    </div>
-                    <div className="col-span-5">
-                      <input className="w-full px-2 py-1.5 rounded text-sm outline-none"
-                        style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0" }}
-                        value={sz.size_label} onChange={e => updateSize(idx, "size_label", e.target.value)} placeholder="44-46/170-176" />
-                    </div>
-                    <div className="col-span-4">
-                      <div className="relative">
-                        <input type="number" min={0} className="w-full px-2 py-1.5 rounded text-sm outline-none pr-6"
-                          style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0" }}
-                          value={sz.price_add} onChange={e => updateSize(idx, "price_add", Number(e.target.value))} />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#8a9ab5" }}>₽</span>
+              <div className="space-y-1" style={{ maxHeight: 400, overflowY: "auto" }}>
+                {formSizes.map((sz, idx) => {
+                  const group = sz.size_label.split("/")[0];
+                  const isFirstInGroup = idx === 0 || formSizes[idx - 1].size_label.split("/")[0] !== group;
+                  return (
+                    <div key={idx}>
+                      {isFirstInGroup && group && (
+                        <div className="px-2 py-1 text-xs font-bold mt-2 first:mt-0" style={{ color: "#f57c00", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em" }}>
+                          Полнота {group}
+                        </div>
+                      )}
+                      <div className="grid gap-1 items-center px-2 py-1.5 rounded"
+                        style={{ gridTemplateColumns: "28px 1fr 80px 110px 28px", background: "#0d1117", border: "1px solid rgba(255,255,255,0.05)", opacity: sz.is_available ? 1 : 0.45 }}>
+                        <div className="flex justify-center">
+                          <input type="checkbox" checked={sz.is_available}
+                            onChange={e => updateSize(idx, "is_available", e.target.checked)}
+                            style={{ accentColor: "#f57c00", width: 14, height: 14, cursor: "pointer" }} />
+                        </div>
+                        <input className="w-full px-2 py-1 rounded text-xs outline-none"
+                          style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.15)", color: "#e8e0d0" }}
+                          value={sz.size_label} onChange={e => updateSize(idx, "size_label", e.target.value)} placeholder="44-46/170-176" />
+                        <div className="relative">
+                          <input type="number" min={0} className="w-full px-2 py-1 rounded text-xs outline-none pr-5"
+                            style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.15)", color: "#e8e0d0" }}
+                            value={sz.price_add} onChange={e => updateSize(idx, "price_add", Number(e.target.value))} />
+                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#8a9ab5" }}>₽</span>
+                        </div>
+                        <input className="w-full px-2 py-1 rounded text-xs outline-none"
+                          style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.15)", color: "#e8e0d0" }}
+                          value={sz.gtin} onChange={e => updateSize(idx, "gtin", e.target.value.replace(/\D/g, "").slice(0, 13))}
+                          placeholder="4600000000000" maxLength={13} />
+                        <button onClick={() => removeSize(idx)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(248,113,113,0.4)", padding: 2 }}>
+                          <Icon name="X" size={12} />
+                        </button>
                       </div>
                     </div>
-                    <div className="col-span-2 flex justify-end">
-                      <button onClick={() => removeSize(idx)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(248,113,113,0.5)", padding: 4 }}
-                        onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
-                        onMouseLeave={e => (e.currentTarget.style.color = "rgba(248,113,113,0.5)")}>
-                        <Icon name="Trash2" size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {formSizes.length === 0 && (
