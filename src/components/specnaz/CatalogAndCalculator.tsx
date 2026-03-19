@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BASE_PRICES, SIZES_GOST } from "./constants";
+import { CatalogPath } from "./CatalogTree";
 import HeroSection from "./HeroSection";
 import CatalogSection from "./CatalogSection";
 import CalculatorSection, { CartItem } from "./CalculatorSection";
@@ -9,7 +10,7 @@ interface CatalogAndCalculatorProps {
 }
 
 export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorProps) {
-  const [activeCategory, setActiveCategory] = useState("Все");
+  const [catalogPath, setCatalogPath] = useState<CatalogPath>({ nodes: [] });
   const [selectedSizes, setSelectedSizes] = useState<Record<number, string>>({});
 
   const [payment, setPayment] = useState("prepayment100");
@@ -65,8 +66,8 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
       <div className="section-divider" />
 
       <CatalogSection
-        activeCategory={activeCategory}
-        setActiveCategory={setActiveCategory}
+        catalogPath={catalogPath}
+        setCatalogPath={setCatalogPath}
         selectedSizes={selectedSizes}
         setSelectedSizes={setSelectedSizes}
         setAddProduct={setAddProduct}

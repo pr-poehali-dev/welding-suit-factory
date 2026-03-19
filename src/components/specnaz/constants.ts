@@ -118,6 +118,53 @@ export const PRODUCTS = [
 
 export const CATEGORIES = ["Все", "Сварка", "Зимняя", "Общие работы", "Сигнальная"];
 
+// ─── Многоуровневое дерево каталога ───────────────────────────────────────────
+
+export interface CatalogNode {
+  id: string;
+  label: string;
+  children?: CatalogNode[];
+  /** Если нет children — это конечная категория, показываем товары */
+  categoryTag?: string;
+}
+
+const SUIT_SUBCATEGORIES: CatalogNode[] = [
+  { id: "welder-canvas",    label: "Костюмы сварщика брезентовые",                categoryTag: "Костюмы сварщика брезентовые" },
+  { id: "welder-combined",  label: "Костюмы сварщика комбинированные",             categoryTag: "Костюмы сварщика комбинированные" },
+  { id: "canvas-spilk",     label: "Костюмы брезентовые со спилковыми накладками", categoryTag: "Костюмы брезентовые со спилковыми накладками" },
+  { id: "welder-spilk",     label: "Костюмы сварщика цельноспилковые",             categoryTag: "Костюмы сварщика цельноспилковые" },
+  { id: "moleskin",         label: "Костюмы молескиновые",                         categoryTag: "Костюмы молескиновые" },
+  { id: "sandblast",        label: "Костюмы пескоструйщика",                       categoryTag: "Костюмы пескоструйщика" },
+];
+
+export const CATALOG_TREE: CatalogNode[] = [
+  {
+    id: "workwear",
+    label: "Спецодежда",
+    children: [
+      {
+        id: "suits",
+        label: "Костюмы",
+        children: [
+          { id: "summer",    label: "Летний ассортимент",  children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `summer-${n.id}` })) },
+          { id: "winter",    label: "Зимний ассортимент",  children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `winter-${n.id}` })) },
+          { id: "demi",      label: "Демисезонный",        children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `demi-${n.id}` })) },
+        ],
+      },
+      {
+        id: "ppe",
+        label: "СИЗ",
+        children: [
+          { id: "head",  label: "Защита головы",   categoryTag: "Защита головы" },
+          { id: "body",  label: "Защита туловища", categoryTag: "Защита туловища" },
+          { id: "hands", label: "Защита рук",      categoryTag: "Защита рук" },
+          { id: "feet",  label: "Защита ног",      categoryTag: "Защита ног" },
+        ],
+      },
+    ],
+  },
+];
+
 export const CERTS = [
   { icon: "ShieldCheck", title: "ГОСТ Р 12.4.250-2019", desc: "Защитная одежда сварщика" },
   { icon: "Award", title: "ISO 11612:2015", desc: "Защита от тепла и огня" },

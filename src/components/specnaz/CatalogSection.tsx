@@ -1,8 +1,11 @@
-import { PRODUCT_IMAGE, PRODUCTS, CATEGORIES, SIZES_GOST, SIZE_SURCHARGE } from "./constants";
+import { PRODUCT_IMAGE, PRODUCTS, SIZES_GOST, SIZE_SURCHARGE } from "./constants";
+import CatalogTree, { CatalogPath } from "./CatalogTree";
+import { CatalogNode } from "./constants";
+import Icon from "@/components/ui/icon";
 
 interface CatalogSectionProps {
-  activeCategory: string;
-  setActiveCategory: (cat: string) => void;
+  catalogPath: CatalogPath;
+  setCatalogPath: (path: CatalogPath) => void;
   selectedSizes: Record<number, string>;
   setSelectedSizes: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   setAddProduct: (product: string) => void;
@@ -10,17 +13,36 @@ interface CatalogSectionProps {
   scrollTo: (href: string) => void;
 }
 
+const accent = "#f57c00";
+const muted = "#8a9ab5";
+const oswald = "'Oswald', sans-serif";
+
+/** Последний узел пути */
+function lastNode(path: CatalogPath): CatalogNode | null {
+  return path.nodes.length ? path.nodes[path.nodes.length - 1] : null;
+}
+
+/** Является ли узел листом (конечной категорией) */
+function isLeafNode(node: CatalogNode | null): boolean {
+  return !!node && !node.children;
+}
+
 export default function CatalogSection({
-  activeCategory,
-  setActiveCategory,
+  catalogPath,
+  setCatalogPath,
   selectedSizes,
   setSelectedSizes,
   setAddProduct,
   setAddSize,
   scrollTo,
 }: CatalogSectionProps) {
-  const filteredProducts =
-    activeCategory === "Все" ? PRODUCTS : PRODUCTS.filter((p) => p.category === activeCategory);
+  const leaf = lastNode(catalogPath);
+  const showProducts = isLeafNode(leaf);
+
+  // Фильтруем по categoryTag конечного узла, либо показываем все если тег отсутствует
+  const filteredProducts = showProducts && leaf?.categoryTag
+    ? PRODUCTS.filter(p => p.category === leaf.categoryTag)
+    : PRODUCTS;
 
   const getCardPrice = (product: typeof PRODUCTS[0], size: string) => {
     const surcharge = SIZE_SURCHARGE[size] ?? 0;
@@ -30,83 +52,150 @@ export default function CatalogSection({
   return (
     <section id="catalog" className="py-24" style={{ background: "#0d1117" }}>
       <div className="max-w-7xl mx-auto px-4 md:px-8">
-        <div className="text-center mb-12">
+
+        {/* Заголовок секции */}
+        <div className="text-center mb-14">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div style={{ width: 32, height: 2, background: "#f57c00" }} />
-            <span className="text-sm tracking-widest uppercase" style={{ color: "#f57c00" }}>Продукция</span>
-            <div style={{ width: 32, height: 2, background: "#f57c00" }} />
+            <div style={{ width: 32, height: 2, background: accent }} />
+            <span className="text-sm tracking-widest uppercase" style={{ color: accent }}>Продукция</span>
+            <div style={{ width: 32, height: 2, background: accent }} />
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>КАТАЛОГ СПЕЦОДЕЖДЫ</h2>
-          <p style={{ color: "#8a9ab5" }}>Размеры по ГОСТ (размер/рост) · цена зависит от размера</p>
+          <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: oswald, color: "#ffffff" }}>
+            КАТАЛОГ СПЕЦОДЕЖДЫ
+          </h2>
+          <p style={{ color: muted }}>Размеры по ГОСТ (размер/рост) · цена зависит от размера</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 justify-center mb-10">
-          {CATEGORIES.map((cat) => (
-            <button key={cat} onClick={() => setActiveCategory(cat)} className="px-5 py-2 text-sm transition-all" style={{
-              fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em",
-              background: activeCategory === cat ? "#f57c00" : "transparent",
-              color: activeCategory === cat ? "#0d1117" : "#8a9ab5",
-              border: `1px solid ${activeCategory === cat ? "#f57c00" : "rgba(138,154,181,0.3)"}`,
-              cursor: "pointer", borderRadius: 2,
-            }}>{cat}</button>
-          ))}
-        </div>
+        {/* Основная сетка: дерево слева + контент справа */}
+        <div className="flex gap-8 flex-col lg:flex-row">
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map((p) => {
-            const currentSize = selectedSizes[p.id] ?? SIZES_GOST[1];
-            const cardPrice = getCardPrice(p, currentSize);
-            const surcharge = SIZE_SURCHARGE[currentSize] ?? 0;
-            return (
-              <div key={p.id} className="product-card rounded overflow-hidden" style={{ background: "#13181f" }}>
-                <div className="relative">
-                  <img src={PRODUCT_IMAGE} alt={p.name} className="w-full h-52 object-cover" />
-                  {p.badge && (
-                    <div className="absolute top-3 left-3 px-2 py-1 text-xs font-bold uppercase" style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.06em" }}>
-                      {p.badge}
-                    </div>
-                  )}
-                </div>
-                <div className="p-5">
-                  <div className="text-xs mb-2 font-medium" style={{ color: "#f57c00", letterSpacing: "0.04em" }}>{p.category}</div>
-                  <h3 className="text-lg font-bold mb-1" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>{p.name}</h3>
-                  <p className="text-sm mb-3 leading-relaxed" style={{ color: "#8a9ab5" }}>{p.desc}</p>
-                  <div className="mb-3">
-                    <div className="text-xs mb-1.5 uppercase tracking-wider" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Размер / Рост (ГОСТ)</div>
-                    <select
-                      value={currentSize}
-                      onChange={(e) => setSelectedSizes((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                      className="w-full px-3 py-2 text-xs rounded"
-                      style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.25)", color: "#e8e0d0", outline: "none" }}
-                    >
-                      {SIZES_GOST.map((s) => (
-                        <option key={s} value={s}>{s}{SIZE_SURCHARGE[s] > 0 ? ` (+${SIZE_SURCHARGE[s] * 100}%)` : ""}</option>
-                      ))}
-                    </select>
+          {/* ── Левая колонка: дерево навигации ── */}
+          <div className="lg:w-80 flex-shrink-0">
+            <div className="rounded-lg overflow-hidden sticky top-24"
+              style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", padding: "24px" }}>
+              <div className="flex items-center gap-2 mb-6">
+                <Icon name="LayoutGrid" size={16} style={{ color: accent }} />
+                <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: accent, fontFamily: oswald }}>
+                  Навигация
+                </span>
+              </div>
+              <CatalogTree path={catalogPath} onNavigate={setCatalogPath} />
+            </div>
+          </div>
+
+          {/* ── Правая колонка: карточки товаров или подсказка ── */}
+          <div className="flex-1 min-w-0">
+            {showProducts ? (
+              <>
+                {/* Хедер раздела */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-2xl font-bold uppercase" style={{ fontFamily: oswald, color: "#ffffff" }}>
+                      {leaf?.label}
+                    </h3>
+                    <p className="text-sm mt-1" style={{ color: muted }}>
+                      {filteredProducts.length} товар{filteredProducts.length === 1 ? "" : filteredProducts.length < 5 ? "а" : "ов"} в разделе
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between py-3" style={{ borderTop: "1px solid rgba(245,124,0,0.1)" }}>
-                    <div>
-                      <div className="text-xl font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>{cardPrice.toLocaleString("ru-RU")} ₽</div>
-                      <div className="text-xs mt-0.5 flex items-center gap-2">
-                        <span style={{ color: "#8a9ab5" }}>{p.gost}</span>
-                        {surcharge > 0 && <span className="px-1.5 py-0.5 rounded" style={{ background: "rgba(245,124,0,0.15)", color: "#f57c00", fontSize: 11 }}>+{surcharge * 100}%</span>}
-                      </div>
-                    </div>
-                    <button
-                      className="btn-outline px-4 py-2 text-xs"
-                      onClick={() => {
-                        setAddProduct(p.name);
-                        setAddSize(currentSize);
-                        scrollTo("#calculator");
-                      }}
-                    >
-                      В калькулятор
-                    </button>
+                  <button
+                    onClick={() => setCatalogPath({ nodes: catalogPath.nodes.slice(0, -1) })}
+                    className="flex items-center gap-1 px-4 py-2 rounded text-sm"
+                    style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.3)", color: accent, cursor: "pointer", fontFamily: oswald }}
+                  >
+                    <Icon name="ArrowLeft" size={14} /> Назад
+                  </button>
+                </div>
+
+                {filteredProducts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 rounded-lg"
+                    style={{ border: "1px dashed rgba(245,124,0,0.2)", color: muted }}>
+                    <Icon name="Package" size={40} style={{ color: "rgba(138,154,181,0.2)", marginBottom: 12 }} />
+                    <div className="text-sm">Товары для этой категории пока добавляются</div>
+                    <div className="text-xs mt-2" style={{ color: "rgba(138,154,181,0.5)" }}>Свяжитесь с нами для уточнения наличия</div>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {filteredProducts.map((p) => {
+                      const currentSize = selectedSizes[p.id] ?? SIZES_GOST[1];
+                      const cardPrice = getCardPrice(p, currentSize);
+                      const surcharge = SIZE_SURCHARGE[currentSize] ?? 0;
+                      return (
+                        <div key={p.id} className="product-card rounded overflow-hidden" style={{ background: "#13181f" }}>
+                          <div className="relative">
+                            <img src={PRODUCT_IMAGE} alt={p.name} className="w-full h-48 object-cover" />
+                            {p.badge && (
+                              <div className="absolute top-3 left-3 px-2 py-1 text-xs font-bold uppercase"
+                                style={{ background: accent, color: "#0d1117", fontFamily: oswald, letterSpacing: "0.06em" }}>
+                                {p.badge}
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-5">
+                            <div className="text-xs mb-2 font-medium" style={{ color: accent, letterSpacing: "0.04em" }}>{p.category}</div>
+                            <h3 className="text-base font-bold mb-1" style={{ fontFamily: oswald, color: "#ffffff" }}>{p.name}</h3>
+                            <p className="text-sm mb-3 leading-relaxed" style={{ color: muted }}>{p.desc}</p>
+                            <div className="mb-3">
+                              <div className="text-xs mb-1.5 uppercase tracking-wider" style={{ color: muted, fontFamily: oswald }}>Размер / Рост (ГОСТ)</div>
+                              <select
+                                value={currentSize}
+                                onChange={(e) => setSelectedSizes((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                                className="w-full px-3 py-2 text-xs rounded"
+                                style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.25)", color: "#e8e0d0", outline: "none" }}
+                              >
+                                {SIZES_GOST.map((s) => (
+                                  <option key={s} value={s}>{s}{SIZE_SURCHARGE[s] > 0 ? ` (+${SIZE_SURCHARGE[s] * 100}%)` : ""}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex items-center justify-between py-3" style={{ borderTop: "1px solid rgba(245,124,0,0.1)" }}>
+                              <div>
+                                <div className="text-xl font-bold" style={{ fontFamily: oswald, color: accent }}>{cardPrice.toLocaleString("ru-RU")} ₽</div>
+                                <div className="text-xs mt-0.5 flex items-center gap-2">
+                                  <span style={{ color: muted }}>{p.gost}</span>
+                                  {surcharge > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded" style={{ background: "rgba(245,124,0,0.15)", color: accent, fontSize: 11 }}>
+                                      +{surcharge * 100}%
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                className="btn-outline px-4 py-2 text-xs"
+                                onClick={() => {
+                                  setAddProduct(p.name);
+                                  setAddSize(currentSize);
+                                  scrollTo("#calculator");
+                                }}
+                              >
+                                В калькулятор
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Приглашение выбрать категорию */
+              <div className="flex flex-col items-center justify-center h-full min-h-64 rounded-lg"
+                style={{ border: "1px dashed rgba(245,124,0,0.2)" }}>
+                <div className="text-center px-8">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                    style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.2)" }}>
+                    <Icon name="LayoutGrid" size={28} style={{ color: "rgba(245,124,0,0.5)" }} />
+                  </div>
+                  <div className="font-semibold text-lg mb-2" style={{ fontFamily: oswald, color: "#ffffff" }}>
+                    Выберите категорию
+                  </div>
+                  <div className="text-sm" style={{ color: muted }}>
+                    Используйте навигацию слева, чтобы найти нужную продукцию
                   </div>
                 </div>
               </div>
-            );
-          })}
+            )}
+          </div>
         </div>
       </div>
     </section>
