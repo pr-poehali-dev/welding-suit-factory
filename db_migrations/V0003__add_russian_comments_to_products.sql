@@ -1,0 +1,13 @@
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.id          IS 'ID товара';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.name         IS 'Название';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.category     IS 'Категория';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.description  IS 'Описание';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.gost         IS 'ГОСТ';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.badge        IS 'Метка (значок)';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.base_price   IS 'Базовая цена, руб.';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.image_url    IS 'Ссылка на фото';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.is_active    IS 'Активен (показывать на сайте)';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.sort_order   IS 'Порядок сортировки';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.stock_status IS 'Остаток на складе';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.created_at   IS 'Дата создания';
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.updated_at   IS 'Дата обновления';
