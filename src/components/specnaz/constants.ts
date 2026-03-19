@@ -146,9 +146,9 @@ export const CATALOG_TREE: CatalogNode[] = [
         id: "suits",
         label: "Костюмы",
         children: [
-          { id: "summer",    label: "Летний ассортимент",  children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `summer-${n.id}` })) },
-          { id: "winter",    label: "Зимний ассортимент",  children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `winter-${n.id}` })) },
-          { id: "demi",      label: "Демисезонный",        children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `demi-${n.id}` })) },
+          { id: "summer",    label: "Летний ассортимент",  children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `summer-${n.id}`, categoryTag: `${n.categoryTag} (летний)` })) },
+          { id: "winter",    label: "Зимний ассортимент",  children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `winter-${n.id}`, categoryTag: `${n.categoryTag} (зимний)` })) },
+          { id: "demi",      label: "Демисезонный",        children: SUIT_SUBCATEGORIES.map(n => ({ ...n, id: `demi-${n.id}`, categoryTag: `${n.categoryTag} (демисезон)` })) },
         ],
       },
       {
