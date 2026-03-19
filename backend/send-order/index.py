@@ -29,14 +29,19 @@ def get_conn():
 
 
 def send_email(subject: str, html: str):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = SMTP_USER
-    msg["To"]      = TO_EMAIL
-    msg.attach(MIMEText(html, "html", "utf-8"))
-    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-        server.login(SMTP_USER, os.environ["SMTP_PASSWORD"])
-        server.sendmail(SMTP_USER, TO_EMAIL, msg.as_string())
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = SMTP_USER
+        msg["To"]      = TO_EMAIL
+        msg.attach(MIMEText(html, "html", "utf-8"))
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            server.login(SMTP_USER, os.environ.get("SMTP_PASSWORD", ""))
+            server.sendmail(SMTP_USER, TO_EMAIL, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"SMTP error: {e}")
+        return False
 
 
 def save_lead(org, contact, phone, email, message, kind, order_json, order_total):
