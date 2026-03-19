@@ -1,8 +1,14 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS, SIZES_GOST } from "./constants";
+import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS } from "./constants";
 
 const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
+
+export interface ProductSizeData {
+  size_label: string;
+  price_add: number;
+  is_available: boolean;
+}
 
 export interface CartItem {
   id: string;
@@ -18,20 +24,27 @@ export function getVolumeDiscount(sum: number): number {
   return 0;
 }
 
-export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number> = {}): number {
+function getPriceAdd(product: string, size: string, productSizes: Record<string, ProductSizeData[]>): number {
+  const sizes = productSizes[product] || [];
+  return sizes.find(s => s.size_label === size)?.price_add ?? 0;
+}
+
+export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number>, productSizes: Record<string, ProductSizeData[]>): number {
   const base = basePrices[product] ?? 0;
+  const priceAdd = getPriceAdd(product, size, productSizes);
+  const fullBase = base + priceAdd;
 
   const payOpt = PAYMENT_OPTIONS.find((p) => p.id === payment) ?? PAYMENT_OPTIONS[0];
   let priceAfterPayment: number;
 
   if (payOpt.id === "preorder30") {
-    priceAfterPayment = base * (1 - 0.018) * (1 - 0.016);
+    priceAfterPayment = fullBase * (1 - 0.018) * (1 - 0.016);
   } else if (payOpt.sign === 1 && payOpt.steps > 0) {
-    priceAfterPayment = base * Math.pow(1.018, payOpt.steps);
+    priceAfterPayment = fullBase * Math.pow(1.018, payOpt.steps);
   } else if (payOpt.sign === -1 && payOpt.id === "preorder14") {
-    priceAfterPayment = base * (1 - 0.018);
+    priceAfterPayment = fullBase * (1 - 0.018);
   } else {
-    priceAfterPayment = base;
+    priceAfterPayment = fullBase;
   }
 
   const logoAdd = withLogo ? base * 0.15 : 0;
@@ -57,6 +70,7 @@ interface CalculatorSectionProps {
   scrollTo: (href: string) => void;
   basePrices: Record<string, number>;
   productNames: string[];
+  productSizes: Record<string, ProductSizeData[]>;
 }
 
 export default function CalculatorSection({
@@ -73,7 +87,9 @@ export default function CalculatorSection({
   scrollTo,
   basePrices,
   productNames,
+  productSizes,
 }: CalculatorSectionProps) {
+  const currentProductSizes = productSizes[addProduct] || [];
   const [showModal, setShowModal] = useState(false);
   const [mOrg, setMOrg] = useState("");
   const [mContact, setMContact] = useState("");
@@ -111,7 +127,7 @@ export default function CalculatorSection({
   };
 
   const cartRows = cart.map((item) => {
-    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices);
+    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices, productSizes);
     return { ...item, unitPrice, lineTotal: unitPrice * item.qty };
   });
   const subtotal = cartRows.reduce((s, r) => s + r.lineTotal, 0);
@@ -188,7 +204,11 @@ export default function CalculatorSection({
                 <div>
                   <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Размер / Рост (ГОСТ)</label>
                   <select value={addSize} onChange={(e) => setAddSize(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0", outline: "none" }}>
-                    {SIZES_GOST.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {currentProductSizes.map((s) => (
+                      <option key={s.size_label} value={s.size_label}>
+                        {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -266,7 +286,11 @@ export default function CalculatorSection({
                           className="w-full px-2 py-1.5 text-xs rounded"
                           style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none" }}
                         >
-                          {SIZES_GOST.map((s) => <option key={s} value={s}>{s}</option>)}
+                          {(productSizes[item.product] || []).map((s) => (
+                            <option key={s.size_label} value={s.size_label}>
+                              {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""}
+                            </option>
+                          ))}
                         </select>
                       </div>
 

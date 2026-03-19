@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { SIZES_GOST } from "./constants";
 import { CatalogPath } from "./CatalogTree";
 import HeroSection from "./HeroSection";
 import CatalogSection from "./CatalogSection";
-import CalculatorSection, { CartItem } from "./CalculatorSection";
+import CalculatorSection, { CartItem, ProductSizeData } from "./CalculatorSection";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
@@ -15,9 +14,9 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [catalogPath, setCatalogPath] = useState<CatalogPath>({ nodes: [] });
   const [selectedSizes, setSelectedSizes] = useState<Record<number, string>>({});
 
-  // Живые данные с бэкенда
   const [basePrices, setBasePrices] = useState<Record<string, number>>({});
   const [productNames, setProductNames] = useState<string[]>([]);
+  const [productSizes, setProductSizes] = useState<Record<string, ProductSizeData[]>>({});
 
   useEffect(() => {
     fetch(API)
@@ -26,12 +25,15 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         const active = (data.products || []).filter((p: { is_active: boolean }) => p.is_active);
         const prices: Record<string, number> = {};
         const names: string[] = [];
-        active.forEach((p: { name: string; base_price: number }) => {
+        const sizes: Record<string, ProductSizeData[]> = {};
+        active.forEach((p: { name: string; base_price: number; sizes?: ProductSizeData[] }) => {
           prices[p.name] = p.base_price;
           if (!names.includes(p.name)) names.push(p.name);
+          sizes[p.name] = (p.sizes || []).filter(s => s.is_available);
         });
         setBasePrices(prices);
         setProductNames(names);
+        setProductSizes(sizes);
       });
   }, []);
 
@@ -41,15 +43,21 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const [addProduct, setAddProduct] = useState("");
-  const [addSize, setAddSize] = useState(SIZES_GOST[1]);
+  const [addSize, setAddSize] = useState("");
   const [addQty, setAddQty] = useState(10);
 
-  // Синхронизируем addProduct с первым товаром после загрузки
   useEffect(() => {
     if (productNames.length > 0 && !addProduct) {
       setAddProduct(productNames[0]);
     }
   }, [productNames, addProduct]);
+
+  useEffect(() => {
+    const sizes = productSizes[addProduct] || [];
+    if (sizes.length > 0 && !sizes.some(s => s.size_label === addSize)) {
+      setAddSize(sizes[0].size_label);
+    }
+  }, [addProduct, productSizes]);
 
   const addToCart = () => {
     if (!addProduct) return;
@@ -124,6 +132,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         scrollTo={scrollTo}
         basePrices={basePrices}
         productNames={productNames}
+        productSizes={productSizes}
       />
     </>
   );
