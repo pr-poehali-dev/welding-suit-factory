@@ -1,11 +1,39 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { NAV_LINKS, CERTS, DELIVERY_ZONES } from "./constants";
+
+const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
 
 interface InfoAndContactsProps {
   scrollTo: (href: string) => void;
 }
 
 export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
+  const [org, setOrg] = useState("");
+  const [contact, setContact] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!phone.trim()) { setError("Укажите телефон для связи"); return; }
+    setSending(true);
+    setError("");
+    try {
+      await fetch(SEND_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "contact", org, contact, phone, message }),
+      });
+      setSent(true);
+    } catch {
+      setError("Ошибка отправки. Позвоните нам напрямую.");
+    }
+    setSending(false);
+  };
+
   return (
     <>
       {/* ПРОИЗВОДСТВО */}
@@ -193,36 +221,51 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
               <h3 className="text-2xl font-bold mb-6" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
                 ЗАЯВКА НА КП
               </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Наименование организации</label>
-                  <input type="text" placeholder="ООО «Металлургический завод»" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
+
+              {sent ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
+                    <Icon name="CheckCircle" size={32} style={{ color: "#4ade80" }} />
+                  </div>
+                  <div className="text-xl font-bold mb-2" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>Заявка отправлена!</div>
+                  <div className="text-sm mb-6" style={{ color: "#8a9ab5" }}>Наш менеджер свяжется с вами в течение 2 часов</div>
+                  <button onClick={() => { setSent(false); setOrg(""); setContact(""); setPhone(""); setMessage(""); }}
+                    className="text-sm px-4 py-2 rounded" style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.3)", color: "#f57c00", cursor: "pointer" }}>
+                    Отправить ещё одну
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+              ) : (
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Контактное лицо</label>
-                    <input type="text" placeholder="Иван Иванов" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
+                    <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Наименование организации</label>
+                    <input type="text" value={org} onChange={e => setOrg(e.target.value)} placeholder="ООО «Металлургический завод»" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Контактное лицо</label>
+                      <input type="text" value={contact} onChange={e => setContact(e.target.value)} placeholder="Иван Иванов" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Телефон *</label>
+                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7 (___) ___-__-__" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: `1px solid ${error ? "rgba(248,113,113,0.5)" : "rgba(245,124,0,0.2)"}`, color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Телефон</label>
-                    <input type="tel" placeholder="+7 (___) ___-__-__" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
+                    <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Что требуется</label>
+                    <textarea rows={3} value={message} onChange={e => setMessage(e.target.value)} placeholder="Укажите наименование, количество, требования к изделиям..." className="w-full px-4 py-3 rounded text-sm resize-none" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
                   </div>
+                  {error && <div className="text-sm text-center" style={{ color: "#f87171" }}>{error}</div>}
+                  <button onClick={handleSubmit} disabled={sending} className="btn-primary w-full py-4 text-base mt-2" style={{ opacity: sending ? 0.7 : 1, cursor: sending ? "default" : "pointer" }}>
+                    {sending ? "Отправляем..." : "Отправить заявку"}
+                  </button>
+                  <p className="text-xs text-center" style={{ color: "#8a9ab5" }}>
+                    Нажимая кнопку, вы соглашаетесь с{" "}
+                    <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#f57c00", textDecoration: "underline" }}>
+                      политикой обработки персональных данных
+                    </a>
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Что требуется</label>
-                  <textarea rows={3} placeholder="Укажите наименование, количество, требования к изделиям..." className="w-full px-4 py-3 rounded text-sm resize-none" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
-                </div>
-                <button className="btn-primary w-full py-4 text-base mt-2">
-                  Отправить заявку
-                </button>
-                <p className="text-xs text-center" style={{ color: "#8a9ab5" }}>
-                  Нажимая кнопку, вы соглашаетесь с{" "}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer"
-                    style={{ color: "#f57c00", textDecoration: "underline" }}>
-                    политикой обработки персональных данных
-                  </a>
-                </p>
-              </div>
+              )}
             </div>
           </div>
         </div>
