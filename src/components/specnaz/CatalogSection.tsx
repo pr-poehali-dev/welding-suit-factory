@@ -8,20 +8,31 @@ const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e"
 
 type StockStatus = "in_stock" | "few" | "low" | "on_order";
 
-const STOCK_MAP: Record<StockStatus, { label: string; color: string }> = {
-  in_stock: { label: "В наличии",  color: "#4ade80" },
-  few:      { label: "Мало",       color: "#facc15" },
-  low:      { label: "Под заказ",  color: "#f87171" },
-  on_order: { label: "Много",      color: "#60a5fa" },
+// Уровни наличия: 4 кружка, закрашенные = есть, пустые = нет
+const STOCK_LEVELS: Record<StockStatus, { label: string; filled: number }> = {
+  on_order: { label: "Много",      filled: 4 },
+  in_stock: { label: "В наличии",  filled: 3 },
+  few:      { label: "Мало",       filled: 1 },
+  low:      { label: "Под заказ",  filled: 0 },
 };
 
 function StockBadge({ status }: { status: StockStatus }) {
-  const s = STOCK_MAP[status] ?? STOCK_MAP.in_stock;
+  const s = STOCK_LEVELS[status] ?? STOCK_LEVELS.in_stock;
   return (
-    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
-      style={{ background: `${s.color}18`, color: s.color, border: `1px solid ${s.color}40` }}>
-      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.color }} />
-      {s.label}
+    <span className="inline-flex items-center gap-2">
+      <span className="flex items-center gap-1">
+        {[0, 1, 2, 3].map(i => (
+          <span key={i} className="rounded-full inline-block"
+            style={{
+              width: 8, height: 8,
+              background: i < s.filled ? "#f57c00" : "transparent",
+              border: `1.5px solid ${i < s.filled ? "#f57c00" : "rgba(245,124,0,0.3)"}`,
+            }} />
+        ))}
+      </span>
+      <span className="text-xs" style={{ color: s.filled === 0 ? "#f87171" : s.filled === 1 ? "#facc15" : "#f57c00" }}>
+        {s.label}
+      </span>
     </span>
   );
 }

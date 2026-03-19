@@ -5,20 +5,30 @@ import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
 const STOCK_OPTIONS = [
-  { value: "in_stock", label: "В наличии",  color: "#4ade80" },
-  { value: "few",      label: "Мало",       color: "#facc15" },
-  { value: "low",      label: "Под заказ",  color: "#f87171" },
-  { value: "on_order", label: "Много",      color: "#60a5fa" },
+  { value: "on_order", label: "Много",      filled: 4 },
+  { value: "in_stock", label: "В наличии",  filled: 3 },
+  { value: "few",      label: "Мало",       filled: 1 },
+  { value: "low",      label: "Под заказ",  filled: 0 },
 ] as const;
 
 type StockStatus = typeof STOCK_OPTIONS[number]["value"];
 
 function StockBadge({ status }: { status: StockStatus }) {
-  const opt = STOCK_OPTIONS.find(o => o.value === status) ?? STOCK_OPTIONS[0];
+  const opt = STOCK_OPTIONS.find(o => o.value === status) ?? STOCK_OPTIONS[1];
+  const labelColor = opt.filled === 0 ? "#f87171" : opt.filled === 1 ? "#facc15" : "#f57c00";
   return (
-    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-      style={{ background: `${opt.color}18`, color: opt.color, border: `1px solid ${opt.color}40` }}>
-      {opt.label}
+    <span className="inline-flex items-center gap-2">
+      <span className="flex items-center gap-1">
+        {[0, 1, 2, 3].map(i => (
+          <span key={i} className="rounded-full inline-block"
+            style={{
+              width: 8, height: 8,
+              background: i < opt.filled ? "#f57c00" : "transparent",
+              border: `1.5px solid ${i < opt.filled ? "#f57c00" : "rgba(245,124,0,0.3)"}`,
+            }} />
+        ))}
+      </span>
+      <span className="text-xs" style={{ color: labelColor }}>{opt.label}</span>
     </span>
   );
 }
@@ -353,20 +363,34 @@ export default function Admin() {
               <div>
                 <div className="text-xs uppercase tracking-widest mb-2" style={labelStyle}>Остаток на складе</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {STOCK_OPTIONS.map(opt => (
-                    <label key={opt.value} className="flex items-center gap-2 p-3 rounded cursor-pointer transition-all"
-                      style={{
-                        background: form.stock_status === opt.value ? `${opt.color}12` : "#0d1117",
-                        border: `1px solid ${form.stock_status === opt.value ? opt.color + "60" : "rgba(255,255,255,0.06)"}`,
-                      }}>
-                      <input type="radio" name="stock_status" value={opt.value} checked={form.stock_status === opt.value}
-                        onChange={() => setForm(f => ({ ...f, stock_status: opt.value }))}
-                        style={{ accentColor: opt.color }} />
-                      <span className="text-sm font-medium" style={{ color: form.stock_status === opt.value ? opt.color : "#8a9ab5" }}>
-                        {opt.label}
-                      </span>
-                    </label>
-                  ))}
+                  {STOCK_OPTIONS.map(opt => {
+                    const isActive = form.stock_status === opt.value;
+                    return (
+                      <label key={opt.value} className="flex items-center gap-3 p-3 rounded cursor-pointer transition-all"
+                        style={{
+                          background: isActive ? "rgba(245,124,0,0.08)" : "#0d1117",
+                          border: `1px solid ${isActive ? "rgba(245,124,0,0.4)" : "rgba(255,255,255,0.06)"}`,
+                        }}>
+                        <input type="radio" name="stock_status" value={opt.value} checked={isActive}
+                          onChange={() => setForm(f => ({ ...f, stock_status: opt.value }))}
+                          className="hidden" />
+                        {/* Кружки */}
+                        <span className="flex items-center gap-0.5">
+                          {[0, 1, 2, 3].map(i => (
+                            <span key={i} className="rounded-full inline-block"
+                              style={{
+                                width: 7, height: 7,
+                                background: i < opt.filled ? "#f57c00" : "transparent",
+                                border: `1.5px solid ${i < opt.filled ? "#f57c00" : "rgba(245,124,0,0.3)"}`,
+                              }} />
+                          ))}
+                        </span>
+                        <span className="text-sm" style={{ color: isActive ? "#e8e0d0" : "#8a9ab5" }}>
+                          {opt.label}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

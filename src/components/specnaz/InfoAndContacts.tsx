@@ -216,7 +216,11 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
                   Отправить заявку
                 </button>
                 <p className="text-xs text-center" style={{ color: "#8a9ab5" }}>
-                  Нажимая кнопку, вы соглашаетесь с политикой обработки персональных данных
+                  Нажимая кнопку, вы соглашаетесь с{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer"
+                    style={{ color: "#f57c00", textDecoration: "underline" }}>
+                    политикой обработки персональных данных
+                  </a>
                 </p>
               </div>
             </div>
@@ -234,12 +238,18 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
             <span className="font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>СПЕЦНАЗ</span>
             <span className="text-sm" style={{ color: "#8a9ab5" }}>© 2024. Все права защищены</span>
           </div>
-          <div className="flex flex-wrap gap-6">
+          <div className="flex flex-wrap gap-6 items-center">
             {NAV_LINKS.map((l) => (
               <button key={l.href} onClick={() => scrollTo(l.href)} className="text-sm" style={{ color: "#8a9ab5", background: "none", border: "none", cursor: "pointer" }}>
                 {l.label}
               </button>
             ))}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-sm"
+              style={{ color: "#8a9ab5", textDecoration: "none" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")}
+              onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
+              Политика конфиденциальности
+            </a>
           </div>
         </div>
       </footer>
