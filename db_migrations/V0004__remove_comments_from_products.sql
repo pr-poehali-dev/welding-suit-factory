@@ -1,0 +1,13 @@
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.id          IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.name         IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.category     IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.description  IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.gost         IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.badge        IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.base_price   IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.image_url    IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.is_active    IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.sort_order   IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.stock_status IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.created_at   IS NULL;
+COMMENT ON COLUMN t_p87775074_welding_suit_factory.products.updated_at   IS NULL;
