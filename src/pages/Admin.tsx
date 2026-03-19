@@ -7,8 +7,8 @@ const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e"
 const STOCK_OPTIONS = [
   { value: "on_order", label: "Много",      filled: 4 },
   { value: "in_stock", label: "В наличии",  filled: 3 },
-  { value: "few",      label: "Мало",       filled: 1 },
-  { value: "low",      label: "Под заказ",  filled: 0 },
+  { value: "few",      label: "Мало",       filled: 2 },
+  { value: "low",      label: "Под заказ",  filled: 1 },
 ] as const;
 
 type StockStatus = typeof STOCK_OPTIONS[number]["value"];

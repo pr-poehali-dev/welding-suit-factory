@@ -12,8 +12,8 @@ type StockStatus = "in_stock" | "few" | "low" | "on_order";
 const STOCK_LEVELS: Record<StockStatus, { label: string; filled: number }> = {
   on_order: { label: "Много",      filled: 4 },
   in_stock: { label: "В наличии",  filled: 3 },
-  few:      { label: "Мало",       filled: 1 },
-  low:      { label: "Под заказ",  filled: 0 },
+  few:      { label: "Мало",       filled: 2 },
+  low:      { label: "Под заказ",  filled: 1 },
 };
 
 function StockBadge({ status }: { status: StockStatus }) {
