@@ -69,10 +69,10 @@ export default function Manager() {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
-      const res  = await fetch(`${API}/auth`, {
+      const res  = await fetch(API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "manager", password }),
+        body: JSON.stringify({ action: "auth", role: "manager", password }),
         signal: controller.signal,
       });
       clearTimeout(timeout);

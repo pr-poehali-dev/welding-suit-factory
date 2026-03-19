@@ -103,16 +103,17 @@ def handler(event: dict, context) -> dict:
     method = event.get("httpMethod", "GET")
     path   = event.get("path", "/")
 
-    # ── POST /auth — авторизация ──
-    if path.endswith("/auth") and method == "POST":
-        body     = json.loads(event.get("body") or "{}")
-        role     = body.get("role", "admin")
-        password = body.get("password", "")
-        secret_key = "ADMIN_PASSWORD" if role == "admin" else "MANAGER_PASSWORD"
-        expected = os.environ.get(secret_key, "")
-        if password == expected:
-            return ok({"ok": True, "role": role})
-        return {"statusCode": 401, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps({"ok": False})}
+    # ── POST (action=auth) — авторизация ──
+    if method == "POST":
+        body_raw = json.loads(event.get("body") or "{}")
+        if body_raw.get("action") == "auth":
+            role       = body_raw.get("role", "admin")
+            password   = body_raw.get("password", "")
+            secret_key = "ADMIN_PASSWORD" if role == "admin" else "MANAGER_PASSWORD"
+            expected   = os.environ.get(secret_key, "")
+            if password and password == expected:
+                return ok({"ok": True, "role": role})
+            return {"statusCode": 401, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps({"ok": False})}
 
     # ── POST /upload — загрузка фото ──
     if path.endswith("/upload") and method == "POST":
