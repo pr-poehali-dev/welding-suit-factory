@@ -38,11 +38,18 @@ function calcItemPrice(product: string, size: string, payment: string, withLogo:
 
   const payOpt = PAYMENT_OPTIONS.find((p) => p.id === payment) ?? PAYMENT_OPTIONS[0];
   let priceAfterPayment: number;
+
   if (payOpt.id === "preorder30") {
-    const after1 = priceWithSize * (1 - 0.018);
-    priceAfterPayment = after1 * (1 - 0.016);
+    // подзаказ 30 дней: −1.8% затем ещё −1.6%
+    priceAfterPayment = priceWithSize * (1 - 0.018) * (1 - 0.016);
+  } else if (payOpt.sign === 1 && payOpt.steps > 0) {
+    // отсрочка: накопительно ×1.018 за каждый шаг
+    priceAfterPayment = priceWithSize * Math.pow(1.018, payOpt.steps);
+  } else if (payOpt.sign === -1 && payOpt.id === "preorder14") {
+    // подзаказ 14 дней: −1.8%
+    priceAfterPayment = priceWithSize * (1 - 0.018);
   } else {
-    priceAfterPayment = priceWithSize * (1 + payOpt.modifier);
+    priceAfterPayment = priceWithSize;
   }
 
   const logoAdd = withLogo ? base * 0.15 : 0;
@@ -324,12 +331,16 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
                         </div>
                       </div>
                       <span className="text-xs font-bold ml-auto whitespace-nowrap" style={{
-                        color: opt.id === "prepayment100" ? "#8a9ab5" : opt.id === "deferred14" ? "#f87171" : "#4ade80",
+                        color: opt.id === "prepayment100" ? "#8a9ab5"
+                          : opt.sign === 1 ? "#f87171"
+                          : "#4ade80",
                       }}>
                         {opt.id === "prepayment100" && "базовая"}
-                        {opt.id === "deferred14" && "+1.8%"}
-                        {opt.id === "preorder14" && "−1.8%"}
-                        {opt.id === "preorder30" && "−1.8%−1.6%"}
+                        {opt.id === "deferred14"    && "+1.8%"}
+                        {opt.id === "deferred30"    && "+3.63%"}
+                        {opt.id === "deferred60"    && "+5.49%"}
+                        {opt.id === "preorder14"    && "−1.8%"}
+                        {opt.id === "preorder30"    && "−3.36%"}
                       </span>
                     </label>
                   ))}

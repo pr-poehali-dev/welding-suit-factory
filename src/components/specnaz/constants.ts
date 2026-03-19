@@ -134,14 +134,18 @@ export const DELIVERY_ZONES = [
 
 // Условия оплаты
 // prepayment100 = базовая цена (100% предоплата)
-// deferred14     = +1.8% к базовой цене (отсрочка 14 дней)
-// preorder14     = −1.8% от базовой цены (подзаказ/предзаказ 14 дней)
-// preorder30     = −1.8% и ещё −1.6% от уже сниженной суммы (подзаказ 30 дней)
+// deferred14    = базовая × 1.018
+// deferred30    = базовая × 1.018 × 1.018
+// deferred60    = базовая × 1.018 × 1.018 × 1.018
+// preorder14    = −1.8% от базовой цены (подзаказ 14 дней)
+// preorder30    = −1.8% и ещё −1.6% от уже сниженной суммы (подзаказ 30 дней)
 export const PAYMENT_OPTIONS = [
-  { id: "prepayment100", label: "100% предоплата",  desc: "Базовая цена",           modifier: 0,      extraDiscount: 0 },
-  { id: "deferred14",    label: "Отсрочка 14 дней", desc: "+1.8% к базовой цене",   modifier: 0.018,  extraDiscount: 0 },
-  { id: "preorder14",    label: "Подзаказ 14 дней", desc: "−1.8% от базовой цены",  modifier: -0.018, extraDiscount: 0 },
-  { id: "preorder30",    label: "Подзаказ 30 дней", desc: "−1.8% и ещё −1.6%",     modifier: -0.018, extraDiscount: 0.016 },
+  { id: "prepayment100", label: "100% предоплата",  desc: "Базовая цена",                        steps: 0,  sign: 1  },
+  { id: "deferred14",    label: "Отсрочка 14 дней", desc: "+1.8% к базовой",                     steps: 1,  sign: 1  },
+  { id: "deferred30",    label: "Отсрочка 30 дней", desc: "+1.8% от 14-дневной (+3.63% итого)",  steps: 2,  sign: 1  },
+  { id: "deferred60",    label: "Отсрочка 60 дней", desc: "+1.8% от 30-дневной (+5.49% итого)",  steps: 3,  sign: 1  },
+  { id: "preorder14",    label: "Подзаказ 14 дней", desc: "−1.8% от базовой цены",               steps: 1,  sign: -1 },
+  { id: "preorder30",    label: "Подзаказ 30 дней", desc: "−1.8% и ещё −1.6% от суммы",         steps: -1, sign: -1 },
 ];
 
 // Скидка от суммы заказа (рублей)
