@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 import Icon from "@/components/ui/icon";
 
 const PROMO_API = "https://functions.poehali.dev/01af805d-fc1a-45ea-a4f2-054ed53c55b7";
@@ -23,7 +24,12 @@ export default function AdminPromo() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ sent: number; skipped: number } | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
-  const [tab, setTab] = useState<"leads" | "send">("leads");
+  const [tab, setTab] = useState<"leads" | "send" | "import">("leads");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
+  const [preview, setPreview] = useState<{ headers: string[]; rows: string[][] } | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ b64: string; filename: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const notify = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -39,6 +45,47 @@ export default function AdminPromo() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const ab = reader.result as ArrayBuffer;
+      const wb = XLSX.read(ab, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+      if (data.length < 2) { notify("Файл пуст или не содержит данных", false); return; }
+      const headers = (data[0] as string[]).map(h => String(h ?? ""));
+      const rows = (data.slice(1) as string[][]).slice(0, 5).map(r =>
+        headers.map((_, i) => String(r[i] ?? ""))
+      );
+      setPreview({ headers, rows });
+      // Base64 для отправки на бэкенд
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
+      setPendingFile({ b64, filename: file.name });
+      setImportResult(null);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  };
+
+  const handleImport = async () => {
+    if (!pendingFile) return;
+    setImporting(true);
+    const res = await fetch(`${PROMO_API}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: pendingFile.b64, filename: pendingFile.filename }),
+    });
+    const data = await res.json();
+    setImportResult({ added: data.added, skipped: data.skipped });
+    setImporting(false);
+    notify(`Импортировано ${data.added} контактов`);
+    setPendingFile(null);
+    setPreview(null);
+    load();
+  };
 
   const unsubscribe = async (id: number) => {
     if (!confirm("Отписать этого клиента от рассылки?")) return;
@@ -134,17 +181,19 @@ export default function AdminPromo() {
         {/* Табы */}
         <div className="flex gap-2 mb-6">
           {[
-            { id: "leads", label: "Контакты", icon: "Users" },
-            { id: "send",  label: "Отправить рассылку", icon: "Send" },
+            { id: "leads",  label: "Контакты",          icon: "Users" },
+            { id: "import", label: "Импорт из Excel",   icon: "FileSpreadsheet" },
+            { id: "send",   label: "Отправить рассылку", icon: "Send" },
           ].map(t => (
-            <button key={t.id} onClick={() => setTab(t.id as "leads" | "send")}
+            <button key={t.id}
               className="flex items-center gap-2 px-5 py-2.5 rounded text-sm"
               style={{
                 background: tab === t.id ? "#f57c00" : "transparent",
                 color: tab === t.id ? "#0d1117" : "#8a9ab5",
                 border: `1px solid ${tab === t.id ? "#f57c00" : "rgba(138,154,181,0.3)"}`,
                 fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: "pointer",
-              }}>
+              }}
+              onClick={() => setTab(t.id as "leads" | "send" | "import")}>
               <Icon name={t.icon} size={14} /> {t.label}
             </button>
           ))}
@@ -221,6 +270,144 @@ export default function AdminPromo() {
               ))}
             </div>
           )
+        )}
+
+        {/* ── Таб: импорт ── */}
+        {tab === "import" && (
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+
+              {/* Зона загрузки */}
+              <div
+                className="rounded-lg flex flex-col items-center justify-center py-12 cursor-pointer transition-all"
+                style={{ border: "2px dashed rgba(245,124,0,0.35)", background: "#13181f" }}
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  fileRef.current?.click();
+                }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = "#f57c00")}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = "rgba(245,124,0,0.35)")}
+              >
+                <Icon name="FileSpreadsheet" size={48} style={{ color: "rgba(245,124,0,0.4)", marginBottom: 12 }} />
+                <div className="font-bold mb-1" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
+                  Загрузить файл
+                </div>
+                <div className="text-sm" style={{ color: "#8a9ab5" }}>Excel (.xlsx) или CSV · нажмите или перетащите</div>
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect} />
+              </div>
+
+              {/* Инструкция по формату */}
+              <div className="rounded-lg p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.15)" }}>
+                <div className="font-bold text-sm mb-3 uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
+                  Формат файла
+                </div>
+                <div className="text-xs mb-3" style={{ color: "#8a9ab5" }}>
+                  Первая строка — заголовки. Система автоматически распознаёт столбцы по названию:
+                </div>
+                <div className="rounded overflow-hidden" style={{ border: "1px solid rgba(245,124,0,0.15)" }}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: "rgba(245,124,0,0.1)" }}>
+                        {["Столбец", "Варианты названия"].map(h => (
+                          <th key={h} className="px-3 py-2 text-left" style={{ color: "#f57c00", fontFamily: "'Oswald', sans-serif" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ["Email", "email, e-mail, почта"],
+                        ["Телефон", "phone, телефон, тел"],
+                        ["Организация", "org, компания, организация, company"],
+                        ["Контакт", "contact, имя, name, фио"],
+                      ].map(([col, variants]) => (
+                        <tr key={col} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                          <td className="px-3 py-2" style={{ color: "#e8e0d0", fontWeight: 600 }}>{col}</td>
+                          <td className="px-3 py-2" style={{ color: "#8a9ab5" }}>{variants}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-xs mt-3" style={{ color: "#8a9ab5" }}>
+                  Дубликаты по телефону или email автоматически пропускаются.
+                </div>
+              </div>
+            </div>
+
+            {/* Превью и кнопка импорта */}
+            <div className="space-y-4">
+              {preview && (
+                <div className="rounded-lg overflow-hidden" style={{ border: "1px solid rgba(245,124,0,0.3)" }}>
+                  <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#13181f", borderBottom: "1px solid rgba(245,124,0,0.15)" }}>
+                    <span className="text-sm font-bold uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
+                      Предпросмотр (первые 5 строк)
+                    </span>
+                    <button onClick={() => { setPreview(null); setPendingFile(null); }}
+                      style={{ background: "none", border: "none", color: "#8a9ab5", cursor: "pointer" }}>
+                      <Icon name="X" size={16} />
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto" style={{ background: "#0d1117" }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid rgba(245,124,0,0.15)" }}>
+                          {preview.headers.map((h, i) => (
+                            <th key={i} className="px-3 py-2 text-left whitespace-nowrap"
+                              style={{ color: "#f57c00", fontFamily: "'Oswald', sans-serif" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.rows.map((row, i) => (
+                          <tr key={i} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                            {row.map((cell, j) => (
+                              <td key={j} className="px-3 py-2 whitespace-nowrap" style={{ color: "#c8bca8", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-4 py-3" style={{ background: "#13181f", borderTop: "1px solid rgba(245,124,0,0.15)" }}>
+                    <button onClick={handleImport} disabled={importing}
+                      className="w-full py-3 text-sm font-bold rounded flex items-center justify-center gap-2"
+                      style={{
+                        background: "#f57c00", color: "#0d1117",
+                        fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em",
+                        cursor: importing ? "default" : "pointer",
+                        opacity: importing ? 0.7 : 1,
+                      }}>
+                      <Icon name="Upload" size={16} />
+                      {importing ? "Импортирую..." : "Загрузить в базу"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {importResult && (
+                <div className="rounded-lg p-5" style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.3)" }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="CheckCircle" size={18} style={{ color: "#4ade80" }} />
+                    <span className="font-bold" style={{ color: "#4ade80", fontFamily: "'Oswald', sans-serif" }}>ИМПОРТ ЗАВЕРШЁН</span>
+                  </div>
+                  <div className="text-sm space-y-1" style={{ color: "#c8bca8" }}>
+                    <div>Добавлено контактов: <strong style={{ color: "#ffffff" }}>{importResult.added}</strong></div>
+                    <div>Пропущено (дубликаты / нет данных): <strong style={{ color: "#ffffff" }}>{importResult.skipped}</strong></div>
+                  </div>
+                </div>
+              )}
+
+              {!preview && !importResult && (
+                <div className="rounded-lg p-6 flex flex-col items-center justify-center text-center"
+                  style={{ border: "1px dashed rgba(245,124,0,0.2)", minHeight: 200 }}>
+                  <Icon name="ArrowLeft" size={24} style={{ color: "rgba(245,124,0,0.3)", marginBottom: 12 }} />
+                  <div className="text-sm" style={{ color: "#8a9ab5" }}>Загрузите файл — здесь появится предпросмотр данных</div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ── Таб: рассылка ── */}

@@ -1,15 +1,20 @@
 """
 Рассылка акционных писем по базе клиентов.
-GET  /       — список лидов (для админки)
-POST /send   — отправить письмо каждому клиенту отдельно
+GET  /        — список лидов (для админки)
+POST /send    — отправить письмо каждому клиенту отдельно
 POST /unsubscribe — отписать клиента по email
+POST /import  — импортировать контакты из Excel/CSV (base64)
 """
 import json
 import os
+import base64
+import io
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import psycopg2
+import openpyxl
+import csv
 
 SMTP_HOST = "smtp.yandex.ru"
 SMTP_PORT = 465
@@ -139,6 +144,78 @@ def handler(event: dict, context) -> dict:
             "statusCode": 200,
             "headers": {**cors(), "Content-Type": "application/json"},
             "body": json.dumps({"ok": True}),
+        }
+
+    # ── POST /import — импорт контактов из Excel/CSV ──
+    if method == "POST" and path.endswith("/import"):
+        body     = json.loads(event.get("body") or "{}")
+        file_b64 = body.get("file", "")
+        filename = body.get("filename", "file.xlsx").lower()
+        raw      = base64.b64decode(file_b64)
+
+        rows = []
+
+        if filename.endswith(".csv"):
+            text_data = raw.decode("utf-8-sig", errors="replace")
+            reader = csv.DictReader(io.StringIO(text_data))
+            for r in reader:
+                rows.append(r)
+        else:
+            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            ws = wb.active
+            headers = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i == 0:
+                    headers = [str(c).strip().lower() if c else "" for c in row]
+                else:
+                    rows.append(dict(zip(headers, row)))
+            wb.close()
+
+        def pick(d, *keys):
+            for k in keys:
+                for dk in d:
+                    if k in dk.lower():
+                        v = d[dk]
+                        return str(v).strip() if v is not None else ""
+            return ""
+
+        conn = get_conn()
+        cur  = conn.cursor()
+        added = 0
+        skipped = 0
+
+        for r in rows:
+            email   = pick(r, "email", "почт", "e-mail")
+            phone   = pick(r, "phone", "телефон", "тел")
+            org     = pick(r, "org", "компания", "организация", "company", "firm")
+            contact = pick(r, "contact", "имя", "name", "контакт", "фио")
+
+            if not email and not phone:
+                skipped += 1
+                continue
+
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.leads WHERE (phone=%s AND phone!='') OR (email=%s AND email!='')",
+                (phone, email)
+            )
+            if cur.fetchone():
+                skipped += 1
+                continue
+
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.leads (org, contact, phone, email, message, kind, order_json, order_total)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (org, contact, phone, email, "импорт из файла", "import", "", 0)
+            )
+            added += 1
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "statusCode": 200,
+            "headers": {**cors(), "Content-Type": "application/json"},
+            "body": json.dumps({"ok": True, "added": added, "skipped": skipped}, ensure_ascii=False),
         }
 
     return {"statusCode": 405, "headers": cors(), "body": "Method Not Allowed"}
