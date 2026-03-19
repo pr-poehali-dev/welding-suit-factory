@@ -168,8 +168,8 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
               <div className="space-y-4">
                 {[
                   { icon: "Phone", label: "Телефон", val: "8-930-885-25-55", href: "tel:+79308852555" },
-                  { icon: "Mail", label: "Email", val: "zakaz@specprom.ru", href: "mailto:zakaz@specprom.ru" },
-                  { icon: "MapPin", label: "Адрес", val: "г. Москва (уточните адрес)", href: null },
+                  { icon: "Mail", label: "Email", val: "s9308852555@yandex.ru", href: "mailto:s9308852555@yandex.ru" },
+                  { icon: "MapPin", label: "Офис и склад", val: "г. Москва, ул. Амурская, 15/1", href: null },
                   { icon: "Clock", label: "Режим работы", val: "Пн–Пт: 9:00–18:00", href: null },
                 ].map((c) => (
                   <div key={c.label} className="flex items-start gap-4">
