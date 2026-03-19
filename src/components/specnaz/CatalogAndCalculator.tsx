@@ -29,7 +29,11 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         active.forEach((p: { name: string; base_price: number; sizes?: ProductSizeData[] }) => {
           prices[p.name] = p.base_price;
           if (!names.includes(p.name)) names.push(p.name);
-          sizes[p.name] = (p.sizes || []).filter(s => s.is_available);
+          sizes[p.name] = (p.sizes || []).filter(s => s.is_available).sort((a, b) => {
+            const pa = (s: ProductSizeData) => { const m1 = s.size_label.match(/^(\d+)/); const m2 = s.size_label.match(/\/(\d+)/); return [m1 ? +m1[1] : 9999, m2 ? +m2[1] : 9999]; };
+            const [aS, aH] = pa(a), [bS, bH] = pa(b);
+            return aS - bS || aH - bH;
+          });
         });
         setBasePrices(prices);
         setProductNames(names);
