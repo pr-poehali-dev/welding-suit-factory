@@ -133,7 +133,7 @@ export default function Manager() {
     const reader = new FileReader();
     reader.onload = async () => {
       const b64 = (reader.result as string).split(",")[1];
-      const res = await fetch(`${API}/upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: b64, contentType: file.type }) });
+      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
       const d   = await res.json();
       setForm(f => ({ ...f, image_url: d.url }));
       setUploading(false);
@@ -148,7 +148,7 @@ export default function Manager() {
     const reader = new FileReader();
     reader.onload = async () => {
       const b64 = (reader.result as string).split(",")[1];
-      const res = await fetch(`${API}/upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: b64, contentType: file.type }) });
+      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
       const d   = await res.json();
       setFormImages(imgs => [...imgs, { url: d.url }]);
       setUploading(false);
@@ -168,7 +168,7 @@ export default function Manager() {
     if (editId !== null) {
       await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
     } else {
-      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
       productId = (await res.json()).id;
     }
     if (productId) {
@@ -177,15 +177,15 @@ export default function Manager() {
       const currentImgs: ProductImage[] = currentProd?.images || [];
       for (const ci of currentImgs) {
         if (!formImages.find(fi => fi.url === ci.url))
-          await fetch(`${API}/images?id=${ci.id}`, { method: "DELETE" });
+          await fetch(`${API}?action=image&id=${ci.id}`, { method: "DELETE" });
       }
       for (let i = 0; i < formImages.length; i++) {
         if (!currentImgs.find(ci => ci.url === formImages[i].url))
-          await fetch(`${API}/images`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_id: productId, url: formImages[i].url, sort_order: i }) });
+          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
       }
       for (const s of formSizes) {
         if (s.size_label.trim())
-          await fetch(`${API}/sizes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...s, product_id: productId }) });
+          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_size", ...s, product_id: productId }) });
       }
     }
     setSaving(false);
