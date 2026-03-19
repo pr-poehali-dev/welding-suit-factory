@@ -1,4 +1,3 @@
-import { SIZES_GOST, SIZE_SURCHARGE } from "./constants";
 import Icon from "@/components/ui/icon";
 import { ApiProduct, accent, muted, oswald, FALLBACK_IMG, CHESTNIY_ZNAK_IMG } from "./catalogTypes";
 import StockBadge from "./StockBadge";
@@ -12,8 +11,10 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, currentSize, onSizeChange, onOpenModal, onAddToCalc }: ProductCardProps) {
-  const surcharge = SIZE_SURCHARGE[currentSize] ?? 0;
-  const cardPrice = Math.round(product.base_price * (1 + surcharge));
+  const availableSizes = (product.sizes || []).filter(s => s.is_available);
+  const currentSizeData = availableSizes.find(s => s.size_label === currentSize);
+  const priceAdd = currentSizeData?.price_add ?? 0;
+  const cardPrice = product.base_price + priceAdd;
 
   return (
     <div className="product-card rounded overflow-hidden flex flex-col" style={{ background: "#13181f" }}>
@@ -50,8 +51,10 @@ export default function ProductCard({ product, currentSize, onSizeChange, onOpen
             className="w-full px-3 py-2 text-xs rounded"
             style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.25)", color: "#e8e0d0", outline: "none" }}
           >
-            {SIZES_GOST.map((s) => (
-              <option key={s} value={s}>{s}{SIZE_SURCHARGE[s] > 0 ? ` (+${SIZE_SURCHARGE[s] * 100}%)` : ""}</option>
+            {availableSizes.map((s) => (
+              <option key={s.size_label} value={s.size_label}>
+                {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""}
+              </option>
             ))}
           </select>
         </div>
@@ -66,9 +69,9 @@ export default function ProductCard({ product, currentSize, onSizeChange, onOpen
               </div>
               <div className="text-xs mt-0.5 flex items-center gap-2">
                 <span style={{ color: muted }}>{product.gost}</span>
-                {surcharge > 0 && (
+                {priceAdd > 0 && (
                   <span className="px-1.5 py-0.5 rounded" style={{ background: "rgba(245,124,0,0.15)", color: accent, fontSize: 11 }}>
-                    +{surcharge * 100}%
+                    +{priceAdd} ₽
                   </span>
                 )}
               </div>

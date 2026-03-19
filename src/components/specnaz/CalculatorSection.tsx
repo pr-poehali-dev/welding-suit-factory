@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS, SIZES_GOST, SIZE_SURCHARGE } from "./constants";
+import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS, SIZES_GOST } from "./constants";
 
 const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
 
@@ -20,20 +20,18 @@ export function getVolumeDiscount(sum: number): number {
 
 export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number> = {}): number {
   const base = basePrices[product] ?? 0;
-  const sizeMult = SIZE_SURCHARGE[size] ?? 0;
-  const priceWithSize = base * (1 + sizeMult);
 
   const payOpt = PAYMENT_OPTIONS.find((p) => p.id === payment) ?? PAYMENT_OPTIONS[0];
   let priceAfterPayment: number;
 
   if (payOpt.id === "preorder30") {
-    priceAfterPayment = priceWithSize * (1 - 0.018) * (1 - 0.016);
+    priceAfterPayment = base * (1 - 0.018) * (1 - 0.016);
   } else if (payOpt.sign === 1 && payOpt.steps > 0) {
-    priceAfterPayment = priceWithSize * Math.pow(1.018, payOpt.steps);
+    priceAfterPayment = base * Math.pow(1.018, payOpt.steps);
   } else if (payOpt.sign === -1 && payOpt.id === "preorder14") {
-    priceAfterPayment = priceWithSize * (1 - 0.018);
+    priceAfterPayment = base * (1 - 0.018);
   } else {
-    priceAfterPayment = priceWithSize;
+    priceAfterPayment = base;
   }
 
   const logoAdd = withLogo ? base * 0.15 : 0;
@@ -190,7 +188,7 @@ export default function CalculatorSection({
                 <div>
                   <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Размер / Рост (ГОСТ)</label>
                   <select value={addSize} onChange={(e) => setAddSize(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0", outline: "none" }}>
-                    {SIZES_GOST.map((s) => <option key={s} value={s}>{s}{SIZE_SURCHARGE[s] > 0 ? ` +${SIZE_SURCHARGE[s] * 100}%` : ""}</option>)}
+                    {SIZES_GOST.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
@@ -257,7 +255,6 @@ export default function CalculatorSection({
                         <div className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{item.product}</div>
                         <div className="text-xs mt-0.5" style={{ color: "#f57c00" }}>
                           {item.unitPrice.toLocaleString("ru-RU")} ₽/шт
-                          {SIZE_SURCHARGE[item.size] > 0 && <span style={{ color: "#8a9ab5" }}> (+{SIZE_SURCHARGE[item.size] * 100}%)</span>}
                         </div>
                       </div>
 
