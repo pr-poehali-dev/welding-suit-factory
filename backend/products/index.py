@@ -107,10 +107,10 @@ def handler(event: dict, context) -> dict:
             return ok({"sizes": rows})
 
         cur.execute(
-            f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url "
+            f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info "
             f"FROM {SCHEMA}.products ORDER BY sort_order, id"
         )
-        cols     = ["id","name","category","description","gost","badge","base_price","image_url","is_active","sort_order","stock_status","gtin","barcode_url"]
+        cols     = ["id","name","category","description","gost","badge","base_price","image_url","is_active","sort_order","stock_status","gtin","barcode_url","protection_class","documentation","materials","extra_info"]
         products = [dict(zip(cols, r)) for r in cur.fetchall()]
 
         if products:
@@ -201,12 +201,13 @@ def handler(event: dict, context) -> dict:
             barcode_url = upload_svg_to_s3(svg, f"barcodes/{uuid.uuid4()}.svg")
         cur.execute(
             f"""INSERT INTO {SCHEMA}.products
-                (name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (body.get("name",""), body.get("category",""), body.get("description",""), body.get("gost",""),
              body.get("badge") or None, int(body.get("base_price",0)), body.get("image_url") or None,
              bool(body.get("is_active",True)), int(body.get("sort_order",0)),
-             body.get("stock_status","in_stock"), gtin, barcode_url),
+             body.get("stock_status","in_stock"), gtin, barcode_url,
+             body.get("protection_class",""), body.get("documentation",""), body.get("materials",""), body.get("extra_info","")),
         )
         new_id = cur.fetchone()[0]
         conn.commit()
@@ -228,12 +229,16 @@ def handler(event: dict, context) -> dict:
             f"""UPDATE {SCHEMA}.products
                 SET name=%s, category=%s, description=%s, gost=%s, badge=%s,
                     base_price=%s, image_url=%s, is_active=%s, sort_order=%s,
-                    stock_status=%s, gtin=%s, barcode_url=%s, updated_at=NOW()
+                    stock_status=%s, gtin=%s, barcode_url=%s,
+                    protection_class=%s, documentation=%s, materials=%s, extra_info=%s,
+                    updated_at=NOW()
                 WHERE id=%s""",
             (body.get("name",""), body.get("category",""), body.get("description",""), body.get("gost",""),
              body.get("badge") or None, int(body.get("base_price",0)), body.get("image_url") or None,
              bool(body.get("is_active",True)), int(body.get("sort_order",0)),
-             body.get("stock_status","in_stock"), gtin, barcode_url, int(body["id"])),
+             body.get("stock_status","in_stock"), gtin, barcode_url,
+             body.get("protection_class",""), body.get("documentation",""), body.get("materials",""), body.get("extra_info",""),
+             int(body["id"])),
         )
         conn.commit()
         conn.close()

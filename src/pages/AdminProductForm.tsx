@@ -42,7 +42,7 @@ export default function AdminProductForm({
     const reader = new FileReader();
     reader.onload = async () => {
       const b64 = (reader.result as string).split(",")[1];
-      const res  = await fetch(`${API}/upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: b64, contentType: file.type }) });
+      const res  = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
       const data = await res.json();
       setForm(f => ({ ...f, image_url: data.url }));
       setUploading(false);
@@ -58,7 +58,7 @@ export default function AdminProductForm({
     const reader = new FileReader();
     reader.onload = async () => {
       const b64 = (reader.result as string).split(",")[1];
-      const res  = await fetch(`${API}/upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: b64, contentType: file.type }) });
+      const res  = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
       const data = await res.json();
       setFormImages(imgs => [...imgs, { url: data.url }]);
       setUploading(false);
@@ -75,7 +75,7 @@ export default function AdminProductForm({
   const updateSize = (idx: number, field: keyof ProductSize, value: string | number | boolean) => {
     setFormSizes(sz => sz.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   };
-  const addSize = () => setFormSizes(sz => [...sz, { size_label: "", price_add: 0, is_available: true }]);
+  const addSize = () => setFormSizes(sz => [...sz, { size_label: "", price_add: 0, is_available: true, gtin: "" }]);
   const removeSize = (idx: number) => setFormSizes(sz => sz.filter((_, i) => i !== idx));
 
   return (
@@ -180,6 +180,34 @@ export default function AdminProductForm({
                   onChange={e => setForm(f => ({ ...f, gtin: e.target.value.replace(/\D/g, "").slice(0, 13) }))}
                   placeholder="4600000000000" maxLength={13} />
                 <div className="text-xs mt-1" style={{ color: "#8a9ab5" }}>13 цифр. Штрихкод EAN-13 генерируется автоматически при сохранении.</div>
+              </div>
+
+              <div>
+                <div style={labelStyle} className="mb-2">Класс защиты</div>
+                <input className={inp} style={inpStyle} value={form.protection_class}
+                  onChange={e => setForm(f => ({ ...f, protection_class: e.target.value }))}
+                  placeholder="ГОСТ Р 12.4.250-2019, класс Б" />
+              </div>
+
+              <div>
+                <div style={labelStyle} className="mb-2">Материалы</div>
+                <textarea className={inp} style={{ ...inpStyle, resize: "none" }} rows={2} value={form.materials}
+                  onChange={e => setForm(f => ({ ...f, materials: e.target.value }))}
+                  placeholder="Ткань: спилок 1,8 мм; подкладка: хлопок 100%" />
+              </div>
+
+              <div>
+                <div style={labelStyle} className="mb-2">Техническая документация</div>
+                <textarea className={inp} style={{ ...inpStyle, resize: "none" }} rows={2} value={form.documentation}
+                  onChange={e => setForm(f => ({ ...f, documentation: e.target.value }))}
+                  placeholder="ТУ 8572-001-00306253-2009, декларация соответствия №..." />
+              </div>
+
+              <div>
+                <div style={labelStyle} className="mb-2">Дополнительная информация</div>
+                <textarea className={inp} style={{ ...inpStyle, resize: "none" }} rows={3} value={form.extra_info}
+                  onChange={e => setForm(f => ({ ...f, extra_info: e.target.value }))}
+                  placeholder="Особенности, комплектация, условия хранения..." />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

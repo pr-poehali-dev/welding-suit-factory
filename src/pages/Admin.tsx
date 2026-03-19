@@ -47,9 +47,11 @@ export default function Admin() {
       gost: p.gost, badge: p.badge || "", base_price: p.base_price,
       image_url: p.image_url, is_active: p.is_active, sort_order: p.sort_order,
       stock_status: p.stock_status ?? "in_stock", gtin: p.gtin || "",
+      protection_class: p.protection_class || "", documentation: p.documentation || "",
+      materials: p.materials || "", extra_info: p.extra_info || "",
     });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
-    setFormSizes(p.sizes?.length ? p.sizes : DEFAULT_SIZES);
+    setFormSizes(p.sizes?.length ? p.sizes.map(s => ({ ...s, gtin: s.gtin || "" })) : DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };
@@ -65,7 +67,7 @@ export default function Admin() {
       const data = await res.json();
       if (data.barcode_url) notify("Штрихкод сгенерирован");
     } else {
-      const res  = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res  = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
       const data = await res.json();
       productId  = data.id;
       if (data.barcode_url) notify("Штрихкод сгенерирован");
@@ -79,21 +81,21 @@ export default function Admin() {
 
       for (const ci of currentImgs) {
         if (!formImages.find(fi => fi.url === ci.url)) {
-          await fetch(`${API}/images?id=${ci.id}`, { method: "DELETE" });
+          await fetch(`${API}?action=image&id=${ci.id}`, { method: "DELETE" });
         }
       }
       for (let i = 0; i < formImages.length; i++) {
         if (!currentImgs.find(ci => ci.url === formImages[i].url)) {
-          await fetch(`${API}/images`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_id: productId, url: formImages[i].url, sort_order: i }) });
+          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
         }
       }
 
       for (const s of formSizes) {
         if (s.size_label.trim()) {
           const existingSize = currentProd?.sizes?.find((cs: ProductSize & { id: number }) => cs.id === (s as ProductSize & { id?: number }).id);
-          await fetch(`${API}/sizes`, {
+          await fetch(API, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...s, product_id: productId, id: existingSize ? (s as ProductSize & { id?: number }).id : undefined }),
+            body: JSON.stringify({ action: "add_size", ...s, product_id: productId, id: existingSize ? (s as ProductSize & { id?: number }).id : undefined }),
           });
         }
       }
@@ -107,7 +109,7 @@ export default function Admin() {
 
   const remove = async (id: number, name: string) => {
     if (!confirm(`Скрыть товар «${name}»?`)) return;
-    await fetch(`${API}?id=${id}`, { method: "DELETE" });
+    await fetch(`${API}?action=product&id=${id}`, { method: "DELETE" });
     notify("Товар скрыт");
     load();
   };
