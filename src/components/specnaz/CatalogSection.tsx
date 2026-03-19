@@ -1,7 +1,23 @@
-import { PRODUCT_IMAGE, PRODUCTS, SIZES_GOST, SIZE_SURCHARGE } from "./constants";
+import { useEffect, useState } from "react";
+import { SIZES_GOST, SIZE_SURCHARGE } from "./constants";
 import CatalogTree, { CatalogPath } from "./CatalogTree";
 import { CatalogNode } from "./constants";
 import Icon from "@/components/ui/icon";
+
+const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
+
+interface ApiProduct {
+  id: number;
+  name: string;
+  category: string;
+  description: string;
+  gost: string;
+  badge: string | null;
+  base_price: number;
+  image_url: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
 
 interface CatalogSectionProps {
   catalogPath: CatalogPath;
@@ -16,13 +32,12 @@ interface CatalogSectionProps {
 const accent = "#f57c00";
 const muted = "#8a9ab5";
 const oswald = "'Oswald', sans-serif";
+const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/3f2a3aec-d043-4d9c-9fd7-97ee66727a80.jpg";
 
-/** Последний узел пути */
 function lastNode(path: CatalogPath): CatalogNode | null {
   return path.nodes.length ? path.nodes[path.nodes.length - 1] : null;
 }
 
-/** Является ли узел листом (конечной категорией) */
 function isLeafNode(node: CatalogNode | null): boolean {
   return !!node && !node.children;
 }
@@ -36,24 +51,36 @@ export default function CatalogSection({
   setAddSize,
   scrollTo,
 }: CatalogSectionProps) {
+  const [allProducts, setAllProducts] = useState<ApiProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(API)
+      .then(r => r.json())
+      .then(data => {
+        setAllProducts((data.products || []).filter((p: ApiProduct) => p.is_active));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
   const leaf = lastNode(catalogPath);
   const showProducts = isLeafNode(leaf);
 
-  // Фильтруем по categoryTag конечного узла, либо показываем все если тег отсутствует
   const filteredProducts = showProducts && leaf?.categoryTag
-    ? PRODUCTS.filter(p => p.category === leaf.categoryTag)
-    : PRODUCTS;
+    ? allProducts.filter(p => p.category === leaf.categoryTag)
+    : allProducts;
 
-  const getCardPrice = (product: typeof PRODUCTS[0], size: string) => {
+  const getCardPrice = (basePrice: number, size: string) => {
     const surcharge = SIZE_SURCHARGE[size] ?? 0;
-    return Math.round(product.basePrice * (1 + surcharge));
+    return Math.round(basePrice * (1 + surcharge));
   };
 
   return (
     <section id="catalog" className="py-24" style={{ background: "#0d1117" }}>
       <div className="max-w-7xl mx-auto px-4 md:px-8">
 
-        {/* Заголовок секции */}
+        {/* Заголовок */}
         <div className="text-center mb-14">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div style={{ width: 32, height: 2, background: accent }} />
@@ -66,10 +93,10 @@ export default function CatalogSection({
           <p style={{ color: muted }}>Размеры по ГОСТ (размер/рост) · цена зависит от размера</p>
         </div>
 
-        {/* Основная сетка: дерево слева + контент справа */}
+        {/* Сетка: дерево + товары */}
         <div className="flex gap-8 flex-col lg:flex-row">
 
-          {/* ── Левая колонка: дерево навигации ── */}
+          {/* Левая колонка: навигация */}
           <div className="lg:w-80 flex-shrink-0">
             <div className="rounded-lg overflow-hidden sticky top-24"
               style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", padding: "24px" }}>
@@ -83,18 +110,17 @@ export default function CatalogSection({
             </div>
           </div>
 
-          {/* ── Правая колонка: карточки товаров или подсказка ── */}
+          {/* Правая колонка: товары */}
           <div className="flex-1 min-w-0">
             {showProducts ? (
               <>
-                {/* Хедер раздела */}
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-2xl font-bold uppercase" style={{ fontFamily: oswald, color: "#ffffff" }}>
                       {leaf?.label}
                     </h3>
                     <p className="text-sm mt-1" style={{ color: muted }}>
-                      {filteredProducts.length} товар{filteredProducts.length === 1 ? "" : filteredProducts.length < 5 ? "а" : "ов"} в разделе
+                      {loading ? "Загрузка..." : `${filteredProducts.length} товар${filteredProducts.length === 1 ? "" : filteredProducts.length < 5 ? "а" : "ов"} в разделе`}
                     </p>
                   </div>
                   <button
@@ -106,7 +132,20 @@ export default function CatalogSection({
                   </button>
                 </div>
 
-                {filteredProducts.length === 0 ? (
+                {loading ? (
+                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="rounded overflow-hidden animate-pulse" style={{ background: "#13181f" }}>
+                        <div style={{ height: 192, background: "#1e2530" }} />
+                        <div className="p-5 space-y-3">
+                          <div style={{ height: 12, background: "#1e2530", borderRadius: 4, width: "60%" }} />
+                          <div style={{ height: 16, background: "#1e2530", borderRadius: 4 }} />
+                          <div style={{ height: 12, background: "#1e2530", borderRadius: 4, width: "80%" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredProducts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 rounded-lg"
                     style={{ border: "1px dashed rgba(245,124,0,0.2)", color: muted }}>
                     <Icon name="Package" size={40} style={{ color: "rgba(138,154,181,0.2)", marginBottom: 12 }} />
@@ -117,12 +156,16 @@ export default function CatalogSection({
                   <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
                     {filteredProducts.map((p) => {
                       const currentSize = selectedSizes[p.id] ?? SIZES_GOST[1];
-                      const cardPrice = getCardPrice(p, currentSize);
+                      const cardPrice = getCardPrice(p.base_price, currentSize);
                       const surcharge = SIZE_SURCHARGE[currentSize] ?? 0;
                       return (
                         <div key={p.id} className="product-card rounded overflow-hidden" style={{ background: "#13181f" }}>
                           <div className="relative">
-                            <img src={PRODUCT_IMAGE} alt={p.name} className="w-full h-48 object-cover" />
+                            <img
+                              src={p.image_url || FALLBACK_IMG}
+                              alt={p.name}
+                              className="w-full h-48 object-cover"
+                            />
                             {p.badge && (
                               <div className="absolute top-3 left-3 px-2 py-1 text-xs font-bold uppercase"
                                 style={{ background: accent, color: "#0d1117", fontFamily: oswald, letterSpacing: "0.06em" }}>
@@ -133,7 +176,7 @@ export default function CatalogSection({
                           <div className="p-5">
                             <div className="text-xs mb-2 font-medium" style={{ color: accent, letterSpacing: "0.04em" }}>{p.category}</div>
                             <h3 className="text-base font-bold mb-1" style={{ fontFamily: oswald, color: "#ffffff" }}>{p.name}</h3>
-                            <p className="text-sm mb-3 leading-relaxed" style={{ color: muted }}>{p.desc}</p>
+                            <p className="text-sm mb-3 leading-relaxed" style={{ color: muted }}>{p.description}</p>
                             <div className="mb-3">
                               <div className="text-xs mb-1.5 uppercase tracking-wider" style={{ color: muted, fontFamily: oswald }}>Размер / Рост (ГОСТ)</div>
                               <select
@@ -149,7 +192,9 @@ export default function CatalogSection({
                             </div>
                             <div className="flex items-center justify-between py-3" style={{ borderTop: "1px solid rgba(245,124,0,0.1)" }}>
                               <div>
-                                <div className="text-xl font-bold" style={{ fontFamily: oswald, color: accent }}>{cardPrice.toLocaleString("ru-RU")} ₽</div>
+                                <div className="text-xl font-bold" style={{ fontFamily: oswald, color: accent }}>
+                                  {cardPrice.toLocaleString("ru-RU")} ₽
+                                </div>
                                 <div className="text-xs mt-0.5 flex items-center gap-2">
                                   <span style={{ color: muted }}>{p.gost}</span>
                                   {surcharge > 0 && (
@@ -178,7 +223,6 @@ export default function CatalogSection({
                 )}
               </>
             ) : (
-              /* Приглашение выбрать категорию */
               <div className="flex flex-col items-center justify-center h-full min-h-64 rounded-lg"
                 style={{ border: "1px dashed rgba(245,124,0,0.2)" }}>
                 <div className="text-center px-8">

@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { BASE_PRICES, SIZES_GOST } from "./constants";
+import { useState, useEffect } from "react";
+import { SIZES_GOST } from "./constants";
 import { CatalogPath } from "./CatalogTree";
 import HeroSection from "./HeroSection";
 import CatalogSection from "./CatalogSection";
 import CalculatorSection, { CartItem } from "./CalculatorSection";
+
+const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
 interface CatalogAndCalculatorProps {
   scrollTo: (href: string) => void;
@@ -13,18 +15,44 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [catalogPath, setCatalogPath] = useState<CatalogPath>({ nodes: [] });
   const [selectedSizes, setSelectedSizes] = useState<Record<number, string>>({});
 
+  // Живые данные с бэкенда
+  const [basePrices, setBasePrices] = useState<Record<string, number>>({});
+  const [productNames, setProductNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch(API)
+      .then(r => r.json())
+      .then(data => {
+        const active = (data.products || []).filter((p: { is_active: boolean }) => p.is_active);
+        const prices: Record<string, number> = {};
+        const names: string[] = [];
+        active.forEach((p: { name: string; base_price: number }) => {
+          prices[p.name] = p.base_price;
+          if (!names.includes(p.name)) names.push(p.name);
+        });
+        setBasePrices(prices);
+        setProductNames(names);
+      });
+  }, []);
+
   const [payment, setPayment] = useState("prepayment100");
   const [withLogo, setWithLogo] = useState(false);
 
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: crypto.randomUUID(), product: "Костюм сварщика КС-01", size: SIZES_GOST[1], qty: 50 },
-  ]);
+  const [cart, setCart] = useState<CartItem[]>([]);
 
-  const [addProduct, setAddProduct] = useState(Object.keys(BASE_PRICES)[0]);
+  const [addProduct, setAddProduct] = useState("");
   const [addSize, setAddSize] = useState(SIZES_GOST[1]);
   const [addQty, setAddQty] = useState(10);
 
+  // Синхронизируем addProduct с первым товаром после загрузки
+  useEffect(() => {
+    if (productNames.length > 0 && !addProduct) {
+      setAddProduct(productNames[0]);
+    }
+  }, [productNames, addProduct]);
+
   const addToCart = () => {
+    if (!addProduct) return;
     setCart((prev) => {
       const existing = prev.find((item) => item.product === addProduct && item.size === addSize);
       if (existing) {
@@ -94,6 +122,8 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         updateQty={updateQty}
         updateSize={updateSize}
         scrollTo={scrollTo}
+        basePrices={basePrices}
+        productNames={productNames}
       />
     </>
   );

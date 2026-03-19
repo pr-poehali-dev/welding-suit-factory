@@ -1,5 +1,5 @@
 import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS, BASE_PRICES, SIZES_GOST, SIZE_SURCHARGE } from "./constants";
+import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS, SIZES_GOST, SIZE_SURCHARGE } from "./constants";
 
 export interface CartItem {
   id: string;
@@ -15,8 +15,8 @@ export function getVolumeDiscount(sum: number): number {
   return 0;
 }
 
-export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean): number {
-  const base = BASE_PRICES[product] ?? 0;
+export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number> = {}): number {
+  const base = basePrices[product] ?? 0;
   const sizeMult = SIZE_SURCHARGE[size] ?? 0;
   const priceWithSize = base * (1 + sizeMult);
 
@@ -54,6 +54,8 @@ interface CalculatorSectionProps {
   updateQty: (id: string, qty: number) => void;
   updateSize: (id: string, size: string) => void;
   scrollTo: (href: string) => void;
+  basePrices: Record<string, number>;
+  productNames: string[];
 }
 
 export default function CalculatorSection({
@@ -68,9 +70,11 @@ export default function CalculatorSection({
   updateQty,
   updateSize,
   scrollTo,
+  basePrices,
+  productNames,
 }: CalculatorSectionProps) {
   const cartRows = cart.map((item) => {
-    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo);
+    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices);
     return { ...item, unitPrice, lineTotal: unitPrice * item.qty };
   });
   const subtotal = cartRows.reduce((s, r) => s + r.lineTotal, 0);
@@ -140,7 +144,7 @@ export default function CalculatorSection({
                 <div>
                   <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Артикул</label>
                   <select value={addProduct} onChange={(e) => setAddProduct(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0", outline: "none" }}>
-                    {Object.keys(BASE_PRICES).map((k) => <option key={k} value={k}>{k}</option>)}
+                    {productNames.map((k) => <option key={k} value={k}>{k}</option>)}
                   </select>
                 </div>
                 <div>
