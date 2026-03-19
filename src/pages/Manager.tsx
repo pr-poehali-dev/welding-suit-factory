@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
-import { API, Product, ProductImage, ProductSize, ManagerForm, DEFAULT_SIZES, emptyForm } from "./managerTypes";
+import { API, Product, ProductImage, ProductSize, ManagerForm, DEFAULT_SIZES, emptyForm, sortSizes } from "./managerTypes";
 import ManagerAuth from "./ManagerAuth";
 import ManagerProductForm from "./ManagerProductForm";
 
@@ -78,7 +78,7 @@ export default function Manager() {
       badge: p.badge || "", base_price: p.base_price, image_url: p.image_url, is_active: p.is_active,
       sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock" });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
-    setFormSizes(p.sizes?.length ? p.sizes.map(s => ({ ...s, gtin: s.gtin || "" })) : DEFAULT_SIZES);
+    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "" }))) : DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };

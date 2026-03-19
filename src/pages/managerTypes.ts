@@ -43,6 +43,19 @@ export const DEFAULT_SIZES: ProductSize[] = SIZE_GROUPS.flatMap(sz =>
   SIZE_HEIGHTS.map(ht => ({ size_label: `${sz}/${ht}`, price_add: PRICE_ADDS[sz] ?? 0, is_available: true, gtin: "" }))
 );
 
+export function sortSizes(sizes: ProductSize[]): ProductSize[] {
+  return [...sizes].sort((a, b) => {
+    const parse = (label: string) => {
+      const m = label.match(/^(\d+)/);
+      const m2 = label.match(/\/(\d+)/);
+      return [m ? parseInt(m[1], 10) : 9999, m2 ? parseInt(m2[1], 10) : 9999];
+    };
+    const [aSize, aHeight] = parse(a.size_label);
+    const [bSize, bHeight] = parse(b.size_label);
+    return aSize - bSize || aHeight - bHeight;
+  });
+}
+
 export const inp = "w-full px-3 py-2.5 rounded text-sm outline-none";
 export const inpSt = { background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0" };
 export const lbl: React.CSSProperties = { color: "#8a9ab5", fontFamily: "'Oswald', sans-serif", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" };

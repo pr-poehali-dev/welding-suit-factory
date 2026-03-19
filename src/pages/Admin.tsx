@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { API, Product, FormState, ProductSize, emptyForm, DEFAULT_SIZES } from "./admin.types";
+import { API, Product, FormState, ProductSize, emptyForm, DEFAULT_SIZES, sortSizes } from "./admin.types";
 import AdminProductTable from "./AdminProductTable";
 import AdminProductForm from "./AdminProductForm";
 
@@ -51,7 +51,7 @@ export default function Admin() {
       materials: p.materials || "", extra_info: p.extra_info || "",
     });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
-    setFormSizes(p.sizes?.length ? p.sizes.map(s => ({ ...s, gtin: s.gtin || "" })) : DEFAULT_SIZES);
+    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "" }))) : DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };
