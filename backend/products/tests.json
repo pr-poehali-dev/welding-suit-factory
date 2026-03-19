@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Получить список товаров",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": { "products": [] },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
