@@ -21,7 +21,7 @@ export default function ProductCard({ product, currentSize, onSizeChange, onOpen
         <img
           src={product.image_url || FALLBACK_IMG}
           alt={product.name}
-          className="w-full h-48 object-cover"
+          className="w-full object-contain"
         />
         {product.badge && (
           <div className="absolute top-3 left-3 px-2 py-1 text-xs font-bold uppercase"
