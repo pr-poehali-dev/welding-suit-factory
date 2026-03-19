@@ -184,9 +184,16 @@ export default function Admin() {
           <span className="font-bold tracking-widest uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>СПЕЦНАЗ</span>
           <span className="text-sm" style={{ color: "#8a9ab5" }}>/ Панель администратора</span>
         </div>
-        <a href="/" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
-          <Icon name="ArrowLeft" size={14} /> На сайт
-        </a>
+        <div className="flex items-center gap-4">
+          <a href="/admin/promo" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")}
+            onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
+            <Icon name="Send" size={14} /> Рассылка
+          </a>
+          <a href="/" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
+            <Icon name="ArrowLeft" size={14} /> На сайт
+          </a>
+        </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-10">

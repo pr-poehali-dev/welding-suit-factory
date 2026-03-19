@@ -12,6 +12,7 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
   const [org, setOrg] = useState("");
   const [contact, setContact] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -25,7 +26,7 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
       await fetch(SEND_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "contact", org, contact, phone, message }),
+        body: JSON.stringify({ kind: "contact", org, contact, phone, email, message }),
       });
       setSent(true);
     } catch {
@@ -229,7 +230,7 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
                   </div>
                   <div className="text-xl font-bold mb-2" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>Заявка отправлена!</div>
                   <div className="text-sm mb-6" style={{ color: "#8a9ab5" }}>Наш менеджер свяжется с вами в течение 2 часов</div>
-                  <button onClick={() => { setSent(false); setOrg(""); setContact(""); setPhone(""); setMessage(""); }}
+                  <button onClick={() => { setSent(false); setOrg(""); setContact(""); setPhone(""); setEmail(""); setMessage(""); }}
                     className="text-sm px-4 py-2 rounded" style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.3)", color: "#f57c00", cursor: "pointer" }}>
                     Отправить ещё одну
                   </button>
@@ -249,6 +250,10 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
                       <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Телефон *</label>
                       <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7 (___) ___-__-__" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: `1px solid ${error ? "rgba(248,113,113,0.5)" : "rgba(245,124,0,0.2)"}`, color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>E-mail *</label>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@company.ru" className="w-full px-4 py-3 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none", fontFamily: "'IBM Plex Sans', sans-serif" }} />
                   </div>
                   <div>
                     <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Что требуется</label>

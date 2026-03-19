@@ -80,6 +80,7 @@ export default function CalculatorSection({
   const [mOrg, setMOrg] = useState("");
   const [mContact, setMContact] = useState("");
   const [mPhone, setMPhone] = useState("");
+  const [mEmail, setMEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [mError, setMError] = useState("");
@@ -98,6 +99,7 @@ export default function CalculatorSection({
           org: mOrg,
           contact: mContact,
           phone: mPhone,
+          email: mEmail,
           payment: payLabel,
           total: totalPrice,
           items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, lineTotal: r.lineTotal })),
@@ -416,6 +418,10 @@ export default function CalculatorSection({
                 <div>
                   <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Телефон *</label>
                   <input type="tel" value={mPhone} onChange={e => setMPhone(e.target.value)} placeholder="+7 (___) ___-__-__" className="w-full px-3 py-2.5 rounded text-sm" style={{ background: "#0d1117", border: `1px solid ${mError ? "rgba(248,113,113,0.5)" : "rgba(245,124,0,0.25)"}`, color: "#e8e0d0", outline: "none" }} />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>E-mail *</label>
+                  <input type="email" value={mEmail} onChange={e => setMEmail(e.target.value)} placeholder="example@company.ru" className="w-full px-3 py-2.5 rounded text-sm" style={{ background: "#0d1117", border: `1px solid ${mError ? "rgba(248,113,113,0.5)" : "rgba(245,124,0,0.25)"}`, color: "#e8e0d0", outline: "none" }} />
                 </div>
 
                 {mError && <div className="text-sm" style={{ color: "#f87171" }}>{mError}</div>}
