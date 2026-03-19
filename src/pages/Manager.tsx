@@ -178,7 +178,7 @@ export default function Manager() {
       const currentImgs: ProductImage[] = currentProd?.images || [];
       for (const ci of currentImgs) {
         if (!formImages.find(fi => fi.url === ci.url))
-          await fetch(`${API}?action=image&id=${ci.id}`, { method: "DELETE" });
+          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
       }
       for (let i = 0; i < formImages.length; i++) {
         if (!currentImgs.find(ci => ci.url === formImages[i].url))

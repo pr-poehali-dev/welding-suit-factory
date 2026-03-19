@@ -147,7 +147,7 @@ function ProductModal({ product, onClose, onAddToCalc, selectedSize, setSelected
                     {product.badge}
                   </div>
                 )}
-                <img src={allImgs[imgIdx]} alt={product.name} className="w-full h-full object-cover" />
+                <img src={allImgs[imgIdx]} alt={product.name} className="w-full h-full object-contain" />
               </div>
 
               {allImgs.length > 1 && (
@@ -435,6 +435,13 @@ export default function CatalogSection({
                               <div className="absolute top-3 left-3 px-2 py-1 text-xs font-bold uppercase"
                                 style={{ background: accent, color: "#0d1117", fontFamily: oswald, letterSpacing: "0.06em" }}>
                                 {p.badge}
+                              </div>
+                            )}
+                            {p.gtin && (
+                              <div className="absolute bottom-2 right-2">
+                                <img src="https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/bucket/13d96f42-3da7-4dbe-bfcc-50c514929a23.png"
+                                  alt="Честный знак" title="Маркировка «Честный знак»"
+                                  style={{ width: 36, height: 36, borderRadius: "50%", opacity: 0.92 }} />
                               </div>
                             )}
                           </div>

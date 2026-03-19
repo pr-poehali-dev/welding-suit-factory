@@ -81,7 +81,7 @@ export default function Admin() {
 
       for (const ci of currentImgs) {
         if (!formImages.find(fi => fi.url === ci.url)) {
-          await fetch(`${API}?action=image&id=${ci.id}`, { method: "DELETE" });
+          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
         }
       }
       for (let i = 0; i < formImages.length; i++) {
@@ -109,7 +109,7 @@ export default function Admin() {
 
   const remove = async (id: number, name: string) => {
     if (!confirm(`Скрыть товар «${name}»?`)) return;
-    await fetch(`${API}?action=product&id=${id}`, { method: "DELETE" });
+    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_product", id }) });
     notify("Товар скрыт");
     load();
   };

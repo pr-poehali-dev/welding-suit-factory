@@ -191,6 +191,25 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return ok({"ok": True, "id": body.get("id")})
 
+        # Удалить товар / фото / размер (через POST чтобы обойти ограничения платформы)
+        if action == "delete_product":
+            conn = get_conn(); cur = conn.cursor()
+            cur.execute(f"UPDATE {SCHEMA}.products SET is_active=false WHERE id=%s", (int(body.get("id", 0)),))
+            conn.commit(); conn.close()
+            return ok({"ok": True})
+
+        if action == "delete_image":
+            conn = get_conn(); cur = conn.cursor()
+            cur.execute(f"UPDATE {SCHEMA}.product_images SET url='' WHERE id=%s", (int(body.get("id", 0)),))
+            conn.commit(); conn.close()
+            return ok({"ok": True})
+
+        if action == "delete_size":
+            conn = get_conn(); cur = conn.cursor()
+            cur.execute(f"UPDATE {SCHEMA}.product_sizes SET is_available=false WHERE id=%s", (int(body.get("id", 0)),))
+            conn.commit(); conn.close()
+            return ok({"ok": True})
+
         # Создать товар (action == "create" или не указан)
         conn = get_conn()
         cur  = conn.cursor()
