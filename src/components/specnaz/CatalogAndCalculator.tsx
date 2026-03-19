@@ -68,10 +68,15 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [addQty, setAddQty] = useState(10);
 
   const addToCart = () => {
-    setCart((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), product: addProduct, size: addSize, qty: addQty },
-    ]);
+    setCart((prev) => {
+      const existing = prev.find((item) => item.product === addProduct && item.size === addSize);
+      if (existing) {
+        return prev.map((item) =>
+          item.id === existing.id ? { ...item, qty: item.qty + addQty } : item
+        );
+      }
+      return [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty: addQty }];
+    });
   };
 
   const removeFromCart = (id: string) => {
@@ -84,7 +89,18 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   };
 
   const updateSize = (id: string, size: string) => {
-    setCart((prev) => prev.map((item) => item.id === id ? { ...item, size } : item));
+    setCart((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (!target) return prev;
+      const duplicate = prev.find((item) => item.id !== id && item.product === target.product && item.size === size);
+      if (duplicate) {
+        // Объединяем: прибавляем количество к дублю, удаляем текущую строку
+        return prev
+          .map((item) => item.id === duplicate.id ? { ...item, qty: item.qty + target.qty } : item)
+          .filter((item) => item.id !== id);
+      }
+      return prev.map((item) => item.id === id ? { ...item, size } : item);
+    });
   };
 
   // Считаем итог по корзине
