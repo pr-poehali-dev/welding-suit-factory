@@ -362,7 +362,7 @@ export default function CalculatorSection({
                   onClick={() => { setShowModal(true); setSent(false); setMError(""); }}
                   style={{ opacity: cart.length === 0 ? 0.4 : 1, cursor: cart.length === 0 ? "default" : "pointer" }}
                 >
-                  Отправить заявку
+                  Запросить счёт
                 </button>
               </div>
             </div>
