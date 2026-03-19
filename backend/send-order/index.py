@@ -1,19 +1,35 @@
 """
 Отправка заявки на email менеджера + сохранение контакта в БД.
-POST / — принимает данные формы или корзины калькулятора
+POST / — принимает данные формы или корзины калькулятора.
+К письму прикрепляется Excel-файл с данными заявки.
 """
 import json
 import os
+import io
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+from datetime import datetime
 import psycopg2
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 SMTP_HOST = "smtp.yandex.ru"
 SMTP_PORT = 465
 SMTP_USER = "s9308852555@yandex.ru"
 TO_EMAIL  = "s9308852555@yandex.ru"
 SCHEMA    = "t_p87775074_welding_suit_factory"
+
+ORANGE = "F57C00"
+HEADER_FONT = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+HEADER_FILL = PatternFill(start_color=ORANGE, end_color=ORANGE, fill_type="solid")
+LABEL_FONT  = Font(name="Arial", color="666666", size=10)
+VALUE_FONT  = Font(name="Arial", bold=True, size=11)
+THIN_BORDER = Border(
+    bottom=Side(style="thin", color="DDDDDD")
+)
 
 
 def cors():
@@ -28,15 +44,144 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
-def send_email(subject: str, html: str):
+def build_contact_excel(org, contact, phone, email, message):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Заявка на КП"
+
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 45
+
+    ws.merge_cells("A1:B1")
+    cell = ws["A1"]
+    cell.value = "СПЕЦНАЗ ФАБРИКА — Заявка на КП"
+    cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=14)
+    cell.fill = HEADER_FILL
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 36
+    ws["B1"].fill = HEADER_FILL
+
+    ws.merge_cells("A2:B2")
+    ws["A2"].value = f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    ws["A2"].font = Font(name="Arial", color="999999", size=9)
+    ws["A2"].alignment = Alignment(horizontal="right")
+
+    fields = [
+        ("Организация", org),
+        ("Контактное лицо", contact),
+        ("Телефон", phone),
+        ("E-mail", email or "—"),
+        ("Что требуется", message),
+    ]
+    for i, (label, value) in enumerate(fields, start=4):
+        ws.cell(row=i, column=1, value=label).font = LABEL_FONT
+        ws.cell(row=i, column=1).border = THIN_BORDER
+        v = ws.cell(row=i, column=2, value=value)
+        v.font = VALUE_FONT
+        v.border = THIN_BORDER
+        if label == "Что требуется":
+            v.alignment = Alignment(wrap_text=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def build_order_excel(org, contact, phone, email, payment, total, items):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Заказ"
+
+    ws.column_dimensions["A"].width = 38
+    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 18
+
+    ws.merge_cells("A1:D1")
+    cell = ws["A1"]
+    cell.value = "СПЕЦНАЗ ФАБРИКА — Заказ из калькулятора"
+    cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=14)
+    cell.fill = HEADER_FILL
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 36
+    for c in ["B1", "C1", "D1"]:
+        ws[c].fill = HEADER_FILL
+
+    ws.merge_cells("A2:D2")
+    ws["A2"].value = f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    ws["A2"].font = Font(name="Arial", color="999999", size=9)
+    ws["A2"].alignment = Alignment(horizontal="right")
+
+    info = [
+        ("Организация", org),
+        ("Контактное лицо", contact),
+        ("Телефон", phone),
+        ("E-mail", email or "—"),
+        ("Условие оплаты", payment),
+    ]
+    for i, (label, value) in enumerate(info, start=4):
+        ws.cell(row=i, column=1, value=label).font = LABEL_FONT
+        ws.cell(row=i, column=1).border = THIN_BORDER
+        ws.merge_cells(start_row=i, start_column=2, end_row=i, end_column=4)
+        v = ws.cell(row=i, column=2, value=value)
+        v.font = VALUE_FONT
+        v.border = THIN_BORDER
+
+    row = len(info) + 5
+    headers = ["Артикул", "Размер", "Кол-во", "Сумма, ₽"]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=row, column=col, value=h)
+        c.font = HEADER_FONT
+        c.fill = HEADER_FILL
+        c.alignment = Alignment(horizontal="center")
+    row += 1
+
+    for item in items:
+        ws.cell(row=row, column=1, value=item.get("product", "")).font = Font(name="Arial", size=10)
+        ws.cell(row=row, column=2, value=item.get("size", "")).font = Font(name="Arial", size=10)
+        ws.cell(row=row, column=2).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=3, value=item.get("qty", 0)).font = Font(name="Arial", size=10)
+        ws.cell(row=row, column=3).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=4, value=item.get("lineTotal", 0)).font = Font(name="Arial", bold=True, size=10)
+        ws.cell(row=row, column=4).alignment = Alignment(horizontal="right")
+        ws.cell(row=row, column=4).number_format = '#,##0'
+        for col in range(1, 5):
+            ws.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    ws.cell(row=row, column=1, value="ИТОГО:").font = Font(name="Arial", bold=True, size=13)
+    ws.cell(row=row, column=1).alignment = Alignment(horizontal="right")
+    t = ws.cell(row=row, column=4, value=total)
+    t.font = Font(name="Arial", bold=True, size=13, color=ORANGE)
+    t.alignment = Alignment(horizontal="right")
+    t.number_format = '#,##0'
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def send_email(subject, html, excel_bytes=None, excel_filename="Заявка.xlsx"):
     pwd = os.environ.get("SMTP_PASSWORD", "")
-    print(f"SMTP debug: user={SMTP_USER}, pwd_len={len(pwd)}, pwd_first2={pwd[:2] if pwd else 'EMPTY'}")
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
         msg["From"]    = SMTP_USER
         msg["To"]      = TO_EMAIL
-        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        html_part = MIMEMultipart("alternative")
+        html_part.attach(MIMEText(html, "html", "utf-8"))
+        msg.attach(html_part)
+
+        if excel_bytes:
+            part = MIMEBase("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            part.set_payload(excel_bytes)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", "attachment", filename=excel_filename)
+            msg.attach(part)
+
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
             server.login(SMTP_USER, pwd)
             server.sendmail(SMTP_USER, TO_EMAIL, msg.as_string())
@@ -74,7 +219,7 @@ def save_lead(org, contact, phone, email, message, kind, order_json, order_total
 
 
 def handler(event: dict, context) -> dict:
-    """Принимает заявку с сайта спецназфабрика.рф, сохраняет контакт в БД и отправляет письмо менеджеру."""
+    """Принимает заявку с сайта спецназфабрика.рф, сохраняет контакт в БД и отправляет письмо с Excel-файлом менеджеру."""
 
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": cors(), "body": ""}
@@ -86,11 +231,11 @@ def handler(event: dict, context) -> dict:
     phone   = body.get("phone", "—")
     email   = body.get("email", "")
 
-    # ── Заявка на КП из формы контактов ──
     if kind == "contact":
         message = body.get("message", "—")
-
         save_lead(org, contact, phone, email, message, "contact", "", 0)
+
+        excel = build_contact_excel(org, contact, phone, email, message)
 
         html = f"""
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -107,18 +252,18 @@ def handler(event: dict, context) -> dict:
     </table>
   </div>
   <div style="background:#eee;padding:12px 24px;font-size:12px;color:#999">
-    Заявка отправлена с сайта спецназфабрика.рф
+    Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
   </div>
 </div>"""
-        send_email("Новая заявка на КП — спецназфабрика.рф", html)
+        send_email("Новая заявка на КП — спецназфабрика.рф", html, excel, f"Заявка_КП_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx")
 
-    # ── Заявка из калькулятора (корзина) ──
     elif kind == "order":
         payment = body.get("payment", "—")
         total   = body.get("total", 0)
         items   = body.get("items", [])
-
         save_lead(org, contact, phone, email, "", "order", json.dumps(items, ensure_ascii=False), total)
+
+        excel = build_order_excel(org, contact, phone, email, payment, total, items)
 
         rows = ""
         for item in items:
@@ -161,10 +306,10 @@ def handler(event: dict, context) -> dict:
     </div>
   </div>
   <div style="background:#eee;padding:12px 24px;font-size:12px;color:#999">
-    Заявка отправлена с сайта спецназфабрика.рф
+    Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
   </div>
 </div>"""
-        send_email(f"Заказ из калькулятора на {total:,} ₽ — спецназфабрика.рф", html)
+        send_email(f"Заказ из калькулятора на {total:,} ₽ — спецназфабрика.рф", html, excel, f"Заказ_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx")
 
     else:
         return {"statusCode": 400, "headers": {**cors(), "Content-Type": "application/json"}, "body": json.dumps({"error": "unknown kind"})}
