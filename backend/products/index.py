@@ -106,9 +106,11 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return ok({"sizes": rows})
 
+        show_all = params.get("show_all") == "1"
+        where = "" if show_all else " WHERE is_active=true"
         cur.execute(
             f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info "
-            f"FROM {SCHEMA}.products ORDER BY sort_order, id"
+            f"FROM {SCHEMA}.products{where} ORDER BY sort_order, id"
         )
         cols     = ["id","name","category","description","gost","badge","base_price","image_url","is_active","sort_order","stock_status","gtin","barcode_url","protection_class","documentation","materials","extra_info"]
         products = [dict(zip(cols, r)) for r in cur.fetchall()]

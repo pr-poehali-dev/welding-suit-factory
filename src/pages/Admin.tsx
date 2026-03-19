@@ -24,9 +24,9 @@ export default function Admin() {
 
   const load = async () => {
     setLoading(true);
-    const res  = await fetch(API);
+    const res  = await fetch(`${API}?show_all=1`);
     const data = await res.json();
-    setProducts(data.products || []);
+    setProducts((data.products || []).filter((p: Product) => p.is_active));
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -74,7 +74,7 @@ export default function Admin() {
     }
 
     if (productId) {
-      const currentRes  = await fetch(API);
+      const currentRes  = await fetch(`${API}?show_all=1`);
       const currentData = await currentRes.json();
       const currentProd = (currentData.products || []).find((p: Product) => p.id === productId);
       const currentImgs: { id: number; url: string }[] = currentProd?.images || [];
