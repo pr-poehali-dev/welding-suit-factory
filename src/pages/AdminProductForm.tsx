@@ -205,13 +205,13 @@ export default function AdminProductForm({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div style={labelStyle} className="mb-2">Базовая цена, ₽</div>
-                  <input type="number" min={0} className={inp} style={inpStyle} value={form.base_price}
-                    onChange={e => setForm(f => ({ ...f, base_price: Number(e.target.value) }))} />
+                  <input type="text" inputMode="numeric" className={inp} style={inpStyle} value={form.base_price || ""}
+                    onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ""); setForm(f => ({ ...f, base_price: v === "" ? 0 : parseInt(v, 10) })); }} />
                 </div>
                 <div>
                   <div style={labelStyle} className="mb-2">Порядок сортировки</div>
-                  <input type="number" min={0} className={inp} style={inpStyle} value={form.sort_order}
-                    onChange={e => setForm(f => ({ ...f, sort_order: Number(e.target.value) }))} />
+                  <input type="text" inputMode="numeric" className={inp} style={inpStyle} value={form.sort_order || ""}
+                    onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ""); setForm(f => ({ ...f, sort_order: v === "" ? 0 : parseInt(v, 10) })); }} />
                 </div>
               </div>
 
@@ -357,9 +357,9 @@ export default function AdminProductForm({
                           style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.15)", color: "#e8e0d0" }}
                           value={sz.size_label} onChange={e => updateSize(idx, "size_label", e.target.value)} placeholder="44-46/170-176" />
                         <div className="relative">
-                          <input type="number" min={0} className="w-full px-2 py-1 rounded text-xs outline-none pr-5"
+                          <input type="text" inputMode="numeric" className="w-full px-2 py-1 rounded text-xs outline-none pr-5"
                             style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.15)", color: "#e8e0d0" }}
-                            value={sz.price_add} onChange={e => updateSize(idx, "price_add", Number(e.target.value))} />
+                            value={sz.price_add || ""} onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ""); updateSize(idx, "price_add", v === "" ? 0 : parseInt(v, 10)); }} />
                           <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#8a9ab5" }}>₽</span>
                         </div>
                         <input className="w-full px-2 py-1 rounded text-xs outline-none"
