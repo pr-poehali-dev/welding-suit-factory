@@ -135,6 +135,10 @@ export default function Admin() {
           <span className="text-sm" style={{ color: "#8a9ab5" }}>/ Администратор</span>
         </div>
         <div className="flex items-center gap-4">
+          <a href="/admin/seo" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
+            <Icon name="Search" size={14} /> SEO
+          </a>
           <a href="/admin/promo" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
             onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
             <Icon name="Send" size={14} /> Рассылка

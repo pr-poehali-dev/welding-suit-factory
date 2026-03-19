@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "@/components/specnaz/Header";
 import CatalogAndCalculator from "@/components/specnaz/CatalogAndCalculator";
 import InfoAndContacts from "@/components/specnaz/InfoAndContacts";
+import SeoHead from "@/components/specnaz/SeoHead";
 
 export default function Index() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -21,6 +22,7 @@ export default function Index() {
       />
       <CatalogAndCalculator scrollTo={scrollTo} />
       <InfoAndContacts scrollTo={scrollTo} />
+      <SeoHead />
     </div>
   );
 }

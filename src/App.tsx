@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import AdminPromo from "./pages/AdminPromo";
+import AdminSeo from "./pages/AdminSeo";
 import Manager from "./pages/Manager";
 import NotFound from "./pages/NotFound";
 
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/admin" element={<Admin />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/admin/promo" element={<AdminPromo />} />
+          <Route path="/admin/seo" element={<AdminSeo />} />
           <Route path="/manager" element={<Manager />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

@@ -106,6 +106,14 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return ok({"sizes": rows})
 
+        if params.get("action") == "seo":
+            cur.execute(f"SELECT meta_title, meta_description, meta_keywords, og_title, og_description, og_image, custom_head_tags, custom_body_tags FROM {SCHEMA}.seo_settings WHERE id=1")
+            row = cur.fetchone()
+            conn.close()
+            if row:
+                return ok({"seo": {"meta_title": row[0], "meta_description": row[1], "meta_keywords": row[2], "og_title": row[3], "og_description": row[4], "og_image": row[5], "custom_head_tags": row[6], "custom_body_tags": row[7]}})
+            return ok({"seo": {}})
+
         show_all = params.get("show_all") == "1"
         where = "" if show_all else " WHERE is_active=true"
         cur.execute(
@@ -194,6 +202,21 @@ def handler(event: dict, context) -> dict:
             return ok({"ok": True, "id": body.get("id")})
 
         # Удалить товар / фото / размер (через POST чтобы обойти ограничения платформы)
+        if action == "save_seo":
+            conn = get_conn(); cur = conn.cursor()
+            seo = body.get("seo", {})
+            cur.execute(
+                f"""UPDATE {SCHEMA}.seo_settings SET
+                    meta_title=%s, meta_description=%s, meta_keywords=%s,
+                    og_title=%s, og_description=%s, og_image=%s,
+                    custom_head_tags=%s, custom_body_tags=%s, updated_at=NOW()
+                    WHERE id=1""",
+                (seo.get("meta_title",""), seo.get("meta_description",""), seo.get("meta_keywords",""),
+                 seo.get("og_title",""), seo.get("og_description",""), seo.get("og_image",""),
+                 seo.get("custom_head_tags",""), seo.get("custom_body_tags","")))
+            conn.commit(); conn.close()
+            return ok({"ok": True})
+
         if action == "delete_product":
             conn = get_conn(); cur = conn.cursor()
             cur.execute(f"UPDATE {SCHEMA}.products SET is_active=false WHERE id=%s", (int(body.get("id", 0)),))
