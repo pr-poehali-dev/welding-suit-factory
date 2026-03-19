@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
+import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
-
-const CATEGORIES = ["Сварка", "Зимняя", "Общие работы", "Сигнальная"];
 
 interface Product {
   id: number;
@@ -20,7 +19,7 @@ interface Product {
 
 const emptyForm = (): Omit<Product, "id"> => ({
   name: "",
-  category: CATEGORIES[0],
+  category: CATALOG_LEAF_CATEGORIES[0],
   description: "",
   gost: "",
   badge: "",
@@ -294,7 +293,7 @@ export default function Admin() {
               <div>
                 <div className="text-xs uppercase tracking-widest mb-2" style={labelStyle}>Категория</div>
                 <select className={inp} style={inpStyle} value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {CATALOG_LEAF_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 
