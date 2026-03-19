@@ -2,7 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 
 const HERO_IMAGE = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/9fb0f06a-0b5f-467c-95b9-aa1d3abaa9ff.jpg";
-const FACTORY_IMAGE = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/05e81fcb-8945-4a07-afed-088cf76a4c1a.jpg";
+const FACTORY_IMAGE = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/2326425b-7243-406f-b890-26adb70827e4.jpg";
 const PRODUCT_IMAGE = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/3f2a3aec-d043-4d9c-9fd7-97ee66727a80.jpg";
 
 const NAV_LINKS = [
@@ -146,7 +146,7 @@ export default function Index() {
             </div>
             <div>
               <div className="font-bold text-lg leading-none" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>
-                СПЕЦПРОМ
+                СПЕЦНАЗ
               </div>
               <div className="text-xs" style={{ color: "#8a9ab5", letterSpacing: "0.05em" }}>Швейная фабрика</div>
             </div>
@@ -166,9 +166,9 @@ export default function Index() {
           </nav>
 
           <div className="hidden lg:flex items-center gap-3">
-            <a href="tel:+78001234567" className="flex items-center gap-2 text-sm font-medium" style={{ color: "#e8e0d0" }}>
+            <a href="tel:+79308852555" className="flex items-center gap-2 text-sm font-medium" style={{ color: "#e8e0d0" }}>
               <Icon name="Phone" size={14} />
-              8 800 123-45-67
+              8-930-885-25-55
             </a>
             <button className="btn-primary px-4 py-2 text-sm" onClick={() => scrollTo("#contacts")}>
               Получить КП
@@ -215,7 +215,7 @@ export default function Index() {
             <div className="flex items-center gap-3 mb-6 animate-fade-up">
               <div style={{ width: 40, height: 2, background: "#f57c00" }} />
               <span className="text-sm font-medium tracking-widest uppercase" style={{ color: "#f57c00", fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                Производство с 1998 года
+                Производство с 2012 года
               </span>
             </div>
             <h1 className="text-5xl md:text-7xl font-bold mb-6 animate-fade-up-delay-1 leading-none" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
@@ -236,7 +236,7 @@ export default function Index() {
 
             <div className="flex flex-wrap gap-8 mt-16 animate-fade-up-delay-4">
               {[
-                { val: "26+", label: "лет на рынке" },
+                { val: "13+", label: "лет на рынке" },
                 { val: "1 200", label: "единиц в сутки" },
                 { val: "500+", label: "клиентов" },
                 { val: "18 ГОСТов", label: "сертифицировано" },
@@ -265,7 +265,7 @@ export default function Index() {
                 КАЧЕСТВО —<br />НАШ СТАНДАРТ
               </h2>
               <p className="mb-5 leading-relaxed" style={{ color: "#8a9ab5" }}>
-                «СпецПром» — швейная фабрика полного производственного цикла. Мы специализируемся на выпуске костюмов сварщика и спецодежды для промышленных предприятий России и стран СНГ.
+                «СпецНаз» — швейная фабрика полного производственного цикла. Мы специализируемся на выпуске костюмов сварщика и спецодежды для промышленных предприятий России и стран СНГ.
               </p>
               <p className="mb-8 leading-relaxed" style={{ color: "#8a9ab5" }}>
                 Собственные пошивочные цеха площадью 4 500 м², современное оборудование и опытный персонал позволяют выпускать до 1 200 изделий в сутки с соблюдением всех стандартов качества.
@@ -287,7 +287,7 @@ export default function Index() {
             <div className="relative">
               <img src={FACTORY_IMAGE} alt="Производство" className="w-full rounded" style={{ aspectRatio: "4/3", objectFit: "cover", border: "1px solid rgba(245,124,0,0.2)" }} />
               <div className="absolute -bottom-4 -left-4 p-4 rounded" style={{ background: "#f57c00", color: "#0d1117" }}>
-                <div className="text-3xl font-bold" style={{ fontFamily: "'Oswald', sans-serif" }}>1998</div>
+                <div className="text-3xl font-bold" style={{ fontFamily: "'Oswald', sans-serif" }}>2012</div>
                 <div className="text-xs font-semibold uppercase tracking-wide">год основания</div>
               </div>
             </div>
@@ -672,9 +672,9 @@ export default function Index() {
 
               <div className="space-y-4">
                 {[
-                  { icon: "Phone", label: "Телефон", val: "8 800 123-45-67 (бесплатно)", href: "tel:+78001234567" },
+                  { icon: "Phone", label: "Телефон", val: "8-930-885-25-55", href: "tel:+79308852555" },
                   { icon: "Mail", label: "Email", val: "zakaz@specprom.ru", href: "mailto:zakaz@specprom.ru" },
-                  { icon: "MapPin", label: "Адрес", val: "г. Москва, ул. Промышленная, 12", href: null },
+                  { icon: "MapPin", label: "Адрес", val: "г. Москва (уточните адрес)", href: null },
                   { icon: "Clock", label: "Режим работы", val: "Пн–Пт: 9:00–18:00", href: null },
                 ].map((c) => (
                   <div key={c.label} className="flex items-start gap-4">
@@ -736,7 +736,7 @@ export default function Index() {
             <div className="w-6 h-6 flex items-center justify-center" style={{ background: "#f57c00" }}>
               <Icon name="Flame" size={14} style={{ color: "#0d1117" }} />
             </div>
-            <span className="font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>СПЕЦПРОМ</span>
+            <span className="font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>СПЕЦНАЗ</span>
             <span className="text-sm" style={{ color: "#8a9ab5" }}>© 2024. Все права защищены</span>
           </div>
           <div className="flex flex-wrap gap-6">
