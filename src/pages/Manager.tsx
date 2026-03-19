@@ -66,14 +66,26 @@ export default function Manager() {
   const handleAuth = async () => {
     setAuthLoading(true);
     setAuthError("");
-    const res  = await fetch(`${API}/auth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "manager", password }) });
-    const data = await res.json();
-    if (data.ok) {
-      sessionStorage.setItem("manager_auth", "1");
-      setAuthed(true);
-      load();
-    } else {
-      setAuthError("Неверный пароль");
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res  = await fetch(`${API}/auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "manager", password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await res.json();
+      if (data.ok) {
+        sessionStorage.setItem("manager_auth", "1");
+        setAuthed(true);
+        load();
+      } else {
+        setAuthError("Неверный пароль");
+      }
+    } catch {
+      setAuthError("Ошибка соединения. Попробуйте ещё раз.");
     }
     setAuthLoading(false);
   };
@@ -84,9 +96,13 @@ export default function Manager() {
 
   const load = async () => {
     setLoading(true);
-    const res  = await fetch(API);
-    const data = await res.json();
-    setProducts(data.products || []);
+    try {
+      const res  = await fetch(API);
+      const data = await res.json();
+      setProducts(data.products || []);
+    } catch {
+      setProducts([]);
+    }
     setLoading(false);
   };
 
@@ -195,12 +211,16 @@ export default function Manager() {
         <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>ВХОД ДЛЯ МЕНЕДЖЕРА</h1>
         <p className="text-sm mb-6" style={{ color: "#8a9ab5" }}>Управление карточками товаров</p>
         <div className="space-y-3">
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleAuth()}
-            placeholder="Введите пароль" className={inp} style={inpSt} />
-          {authError && <div className="text-sm" style={{ color: "#f87171" }}>{authError}</div>}
-          <button onClick={handleAuth} disabled={authLoading} className="w-full py-3 text-sm font-bold rounded"
-            style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: "pointer", opacity: authLoading ? 0.7 : 1 }}>
+          <input type="password" value={password} onChange={e => { setPassword(e.target.value); setAuthError(""); }}
+            onKeyDown={e => e.key === "Enter" && !authLoading && handleAuth()}
+            placeholder="Введите пароль" className={inp} style={{ ...inpSt, border: authError ? "1px solid rgba(248,113,113,0.5)" : inpSt.border }} />
+          {authError && (
+            <div className="text-sm px-3 py-2 rounded" style={{ color: "#f87171", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)" }}>
+              {authError}
+            </div>
+          )}
+          <button onClick={handleAuth} disabled={authLoading || !password.trim()} className="w-full py-3 text-sm font-bold rounded"
+            style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: authLoading || !password.trim() ? "default" : "pointer", opacity: authLoading || !password.trim() ? 0.6 : 1 }}>
             {authLoading ? "Проверяю..." : "Войти"}
           </button>
         </div>
