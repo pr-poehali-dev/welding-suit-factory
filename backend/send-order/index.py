@@ -29,6 +29,8 @@ def get_conn():
 
 
 def send_email(subject: str, html: str):
+    pwd = os.environ.get("SMTP_PASSWORD", "")
+    print(f"SMTP debug: user={SMTP_USER}, pwd_len={len(pwd)}, pwd_first2={pwd[:2] if pwd else 'EMPTY'}")
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -36,8 +38,9 @@ def send_email(subject: str, html: str):
         msg["To"]      = TO_EMAIL
         msg.attach(MIMEText(html, "html", "utf-8"))
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-            server.login(SMTP_USER, os.environ.get("SMTP_PASSWORD", ""))
+            server.login(SMTP_USER, pwd)
             server.sendmail(SMTP_USER, TO_EMAIL, msg.as_string())
+        print("SMTP: email sent OK")
         return True
     except Exception as e:
         print(f"SMTP error: {e}")
