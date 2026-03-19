@@ -76,7 +76,7 @@ export default function Manager() {
     setEditId(p.id);
     setForm({ name: p.name, category: p.category, description: p.description, gost: p.gost,
       badge: p.badge || "", base_price: p.base_price, image_url: p.image_url, is_active: p.is_active,
-      sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock", gtin: p.gtin || "" });
+      sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock" });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
     setFormSizes(p.sizes?.length ? p.sizes.map(s => ({ ...s, gtin: s.gtin || "" })) : DEFAULT_SIZES);
     setActiveTab("main");

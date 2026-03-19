@@ -24,13 +24,13 @@ export interface Product {
 export type ManagerForm = {
   name: string; category: string; description: string; gost: string; badge: string;
   base_price: number; image_url: string | null; is_active: boolean; sort_order: number;
-  stock_status: StockStatus; gtin: string;
+  stock_status: StockStatus;
 };
 
 export const emptyForm = (): ManagerForm => ({
   name: "", category: CATALOG_LEAF_CATEGORIES[0], description: "",
   gost: "", badge: "", base_price: 0, image_url: null,
-  is_active: true, sort_order: 0, stock_status: "in_stock", gtin: "",
+  is_active: true, sort_order: 0, stock_status: "in_stock",
 });
 
 const SIZE_GROUPS = ["40-42","44-46","48-50","52-54","56-58","60-62","64-66","68-70","72-74","76-78"];

@@ -47,7 +47,6 @@ export type FormState = {
   is_active: boolean;
   sort_order: number;
   stock_status: StockStatus;
-  gtin: string;
   protection_class: string;
   documentation: string;
   materials: string;
@@ -58,7 +57,7 @@ export const emptyForm = (): FormState => ({
   name: "", category: CATALOG_LEAF_CATEGORIES[0], description: "",
   gost: "", badge: "", base_price: 0, image_url: null,
   is_active: true, sort_order: 0, stock_status: "in_stock",
-  gtin: "", protection_class: "", documentation: "", materials: "", extra_info: "",
+  protection_class: "", documentation: "", materials: "", extra_info: "",
 });
 
 const SIZE_GROUPS  = ["40-42","44-46","48-50","52-54","56-58","60-62","64-66","68-70","72-74","76-78"];

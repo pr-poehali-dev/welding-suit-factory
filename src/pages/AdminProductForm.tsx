@@ -175,14 +175,6 @@ export default function AdminProductForm({
               </div>
 
               <div>
-                <div style={labelStyle} className="mb-2">GTIN (EAN-13) — штрихкод товара</div>
-                <input className={inp} style={inpStyle} value={form.gtin}
-                  onChange={e => setForm(f => ({ ...f, gtin: e.target.value.replace(/\D/g, "").slice(0, 13) }))}
-                  placeholder="4600000000000" maxLength={13} />
-                <div className="text-xs mt-1" style={{ color: "#8a9ab5" }}>13 цифр. Штрихкод EAN-13 генерируется автоматически при сохранении.</div>
-              </div>
-
-              <div>
                 <div style={labelStyle} className="mb-2">Класс защиты</div>
                 <input className={inp} style={inpStyle} value={form.protection_class}
                   onChange={e => setForm(f => ({ ...f, protection_class: e.target.value }))}

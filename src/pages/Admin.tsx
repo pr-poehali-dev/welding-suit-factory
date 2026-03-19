@@ -46,7 +46,7 @@ export default function Admin() {
       name: p.name, category: p.category, description: p.description,
       gost: p.gost, badge: p.badge || "", base_price: p.base_price,
       image_url: p.image_url, is_active: p.is_active, sort_order: p.sort_order,
-      stock_status: p.stock_status ?? "in_stock", gtin: p.gtin || "",
+      stock_status: p.stock_status ?? "in_stock",
       protection_class: p.protection_class || "", documentation: p.documentation || "",
       materials: p.materials || "", extra_info: p.extra_info || "",
     });

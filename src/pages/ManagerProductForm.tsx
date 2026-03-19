@@ -122,10 +122,6 @@ export default function ManagerProductForm({
                 <div><div style={lbl} className="mb-2">ГОСТ</div><input className={inp} style={inpSt} value={form.gost} onChange={e => setForm(f => ({ ...f, gost: e.target.value }))} /></div>
                 <div><div style={lbl} className="mb-2">Метка</div><input className={inp} style={inpSt} value={form.badge || ""} onChange={e => setForm(f => ({ ...f, badge: e.target.value }))} /></div>
               </div>
-              <div><div style={lbl} className="mb-2">GTIN (EAN-13)</div>
-                <input className={inp} style={inpSt} value={form.gtin} onChange={e => setForm(f => ({ ...f, gtin: e.target.value.replace(/\D/g, "").slice(0, 13) }))} placeholder="4600000000000" maxLength={13} />
-                <div className="text-xs mt-1" style={{ color: "#8a9ab5" }}>13 цифр. Штрихкод EAN-13 формируется автоматически.</div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><div style={lbl} className="mb-2">Базовая цена, ₽</div><input type="number" min={0} className={inp} style={inpSt} value={form.base_price} onChange={e => setForm(f => ({ ...f, base_price: Number(e.target.value) }))} /></div>
                 <div><div style={lbl} className="mb-2">Порядок</div><input type="number" min={0} className={inp} style={inpSt} value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: Number(e.target.value) }))} /></div>
