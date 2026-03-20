@@ -8,6 +8,14 @@ export interface ProductSizeData {
   size_label: string;
   price_add: number;
   is_available: boolean;
+  stock_qty?: number;
+}
+
+function stockInfo(qty: number) {
+  if (qty === 0) return { color: "#f87171", label: "Под заказ" };
+  if (qty < 20)  return { color: "#facc15", label: "Мало" };
+  if (qty <= 100) return { color: "#4ade80", label: "В наличии" };
+  return { color: "#60a5fa", label: "Много" };
 }
 
 export interface CartItem {
@@ -212,13 +220,24 @@ export default function CalculatorSection({
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Размер / Рост (ГОСТ)</label>
-                  <select value={addSize} onChange={(e) => setAddSize(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0", outline: "none" }}>
-                    {currentProductSizes.map((s) => (
-                      <option key={s.size_label} value={s.size_label}>
-                        {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  {(() => { const asi = stockInfo(currentProductSizes.find(s => s.size_label === addSize)?.stock_qty ?? 0); return (
+                    <>
+                      <select value={addSize} onChange={(e) => setAddSize(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: `1px solid ${asi.color}40`, color: asi.color, outline: "none" }}>
+                        {currentProductSizes.map((s) => {
+                          const si = stockInfo(s.stock_qty ?? 0);
+                          return (
+                            <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#0d1117" }}>
+                              {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: asi.color }} />
+                        <span className="text-xs" style={{ color: asi.color }}>{asi.label}</span>
+                      </div>
+                    </>
+                  ); })()}
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Количество, шт</label>
@@ -292,18 +311,29 @@ export default function CalculatorSection({
 
                       {/* Размер */}
                       <div className="col-span-6 md:col-span-3">
-                        <select
-                          value={item.size}
-                          onChange={(e) => updateSize(item.id, e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs rounded"
-                          style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.2)", color: "#e8e0d0", outline: "none" }}
-                        >
-                          {(productSizes[item.product] || []).map((s) => (
-                            <option key={s.size_label} value={s.size_label}>
-                              {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""}
-                            </option>
-                          ))}
-                        </select>
+                        {(() => { const csi = stockInfo((productSizes[item.product] || []).find(s => s.size_label === item.size)?.stock_qty ?? 0); return (
+                          <>
+                            <select
+                              value={item.size}
+                              onChange={(e) => updateSize(item.id, e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs rounded"
+                              style={{ background: "#0d1117", border: `1px solid ${csi.color}40`, color: csi.color, outline: "none" }}
+                            >
+                              {(productSizes[item.product] || []).map((s) => {
+                                const si = stockInfo(s.stock_qty ?? 0);
+                                return (
+                                  <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#0d1117" }}>
+                                    {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: csi.color }} />
+                              <span style={{ color: csi.color, fontSize: 10 }}>{csi.label}</span>
+                            </div>
+                          </>
+                        ); })()}
                       </div>
 
                       {/* Количество */}
