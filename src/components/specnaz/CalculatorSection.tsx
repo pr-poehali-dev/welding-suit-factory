@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, PAYMENT_GROUPS, VOLUME_DISCOUNTS } from "./constants";
+import { PAYMENT_OPTIONS, PAYMENT_GROUPS, VOLUME_DISCOUNTS, type PaymentOption } from "./constants";
 import CalcPaymentPanel from "./CalcPaymentPanel";
 import CalcCartTable from "./CalcCartTable";
 import CalcOrderModal from "./CalcOrderModal";
@@ -39,18 +39,20 @@ function getPriceAdd(product: string, size: string, productSizes: Record<string,
   return (productSizes[product] || []).find(s => s.size_label === size)?.price_add ?? 0;
 }
 
-export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number>, productSizes: Record<string, ProductSizeData[]>): number {
+export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number>, productSizes: Record<string, ProductSizeData[]>, options?: PaymentOption[]): number {
   const base = basePrices[product] ?? 0;
   const priceAdd = getPriceAdd(product, size, productSizes);
   const fullBase = base + priceAdd;
-  const payOpt = PAYMENT_OPTIONS.find((p) => p.id === payment) ?? PAYMENT_OPTIONS[0];
+  const opts = options ?? PAYMENT_OPTIONS;
+  const payOpt = opts.find((p) => p.id === payment) ?? opts[0];
   const priceAfterPayment = fullBase * payOpt.coeff;
   const logoAdd = withLogo ? base * 0.15 : 0;
   return Math.round(priceAfterPayment + logoAdd);
 }
 
-export function getPaymentAvailability(payment: string): "stock" | "order" {
-  const payOpt = PAYMENT_OPTIONS.find(p => p.id === payment);
+export function getPaymentAvailability(payment: string, options?: PaymentOption[]): "stock" | "order" {
+  const opts = options ?? PAYMENT_OPTIONS;
+  const payOpt = opts.find(p => p.id === payment);
   return payOpt?.availability ?? "stock";
 }
 
@@ -74,6 +76,7 @@ interface CalculatorSectionProps {
   basePrices: Record<string, number>;
   productNames: string[];
   productSizes: Record<string, ProductSizeData[]>;
+  paymentOptionsOverride?: PaymentOption[] | null;
   stockWarning?: string;
   dismissWarning?: () => void;
 }
@@ -93,10 +96,12 @@ export default function CalculatorSection({
   basePrices,
   productNames,
   productSizes,
+  paymentOptionsOverride,
   stockWarning,
   dismissWarning,
 }: CalculatorSectionProps) {
-  const payOpt = PAYMENT_OPTIONS.find(p => p.id === payment) ?? PAYMENT_OPTIONS[0];
+  const activeOptions = paymentOptionsOverride ?? PAYMENT_OPTIONS;
+  const payOpt = activeOptions.find(p => p.id === payment) ?? activeOptions[0];
   const availability = payOpt.availability;
 
   const currentProductSizes = productSizes[addProduct] || [];
@@ -111,7 +116,7 @@ export default function CalculatorSection({
   const [mError, setMError] = useState("");
 
   const rawRows = cart.map((item) => {
-    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices, productSizes);
+    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices, productSizes, activeOptions);
     return { ...item, unitPrice, lineTotal: unitPrice * item.qty };
   });
   const subtotal = rawRows.reduce((s, r) => s + r.lineTotal, 0);
@@ -177,6 +182,7 @@ export default function CalculatorSection({
             setPayment={setPayment}
             withLogo={withLogo}
             setWithLogo={setWithLogo}
+            paymentOptions={activeOptions}
             addProduct={addProduct}
             setAddProduct={setAddProduct}
             addSize={addSize}

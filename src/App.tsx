@@ -10,6 +10,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import AdminPromo from "./pages/AdminPromo";
 import AdminSeo from "./pages/AdminSeo";
 import Manager from "./pages/Manager";
+import AdminPayments from "./pages/AdminPayments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/admin/promo" element={<AdminPromo />} />
           <Route path="/admin/seo" element={<AdminSeo />} />
+          <Route path="/admin/payments" element={<AdminPayments />} />
           <Route path="/manager" element={<Manager />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

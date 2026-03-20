@@ -106,6 +106,12 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return ok({"sizes": rows})
 
+        if params.get("action") == "payment_options":
+            cur.execute(f"SELECT id, option_id, group_id, availability, label, description, coeff, sort_order FROM {SCHEMA}.payment_options ORDER BY sort_order, id")
+            rows = [{"id": r[0], "option_id": r[1], "group_id": r[2], "availability": r[3], "label": r[4], "description": r[5], "coeff": float(r[6]), "sort_order": r[7]} for r in cur.fetchall()]
+            conn.close()
+            return ok({"payment_options": rows})
+
         if params.get("action") == "seo":
             cur.execute(f"SELECT meta_title, meta_description, meta_keywords, og_title, og_description, og_image, custom_head_tags, custom_body_tags FROM {SCHEMA}.seo_settings WHERE id=1")
             row = cur.fetchone()
@@ -215,6 +221,17 @@ def handler(event: dict, context) -> dict:
                 (seo.get("meta_title",""), seo.get("meta_description",""), seo.get("meta_keywords",""),
                  seo.get("og_title",""), seo.get("og_description",""), seo.get("og_image",""),
                  seo.get("custom_head_tags",""), seo.get("custom_body_tags","")))
+            conn.commit(); conn.close()
+            return ok({"ok": True})
+
+        if action == "save_payment_options":
+            conn = get_conn(); cur = conn.cursor()
+            items = body.get("items", [])
+            for item in items:
+                cur.execute(
+                    f"""UPDATE {SCHEMA}.payment_options SET label=%s, description=%s, coeff=%s, sort_order=%s WHERE id=%s""",
+                    (item["label"], item.get("description", ""), float(item["coeff"]), int(item.get("sort_order", 0)), int(item["id"]))
+                )
             conn.commit(); conn.close()
             return ok({"ok": True})
 

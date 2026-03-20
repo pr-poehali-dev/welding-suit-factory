@@ -1,11 +1,12 @@
 import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, PAYMENT_GROUPS } from "./constants";
+import { PAYMENT_OPTIONS, PAYMENT_GROUPS, type PaymentOption } from "./constants";
 import { stockInfo, type ProductSizeData } from "./CalculatorSection";
 
 interface CalcPaymentPanelProps {
   payment: string;
   setPayment: (val: string) => void;
   withLogo: boolean;
+  paymentOptions?: PaymentOption[];
   setWithLogo: (val: boolean) => void;
   addProduct: string;
   setAddProduct: (val: string) => void;
@@ -34,7 +35,9 @@ export default function CalcPaymentPanel({
   productNames,
   currentProductSizes,
   availability,
+  paymentOptions,
 }: CalcPaymentPanelProps) {
+  const opts = paymentOptions ?? PAYMENT_OPTIONS;
   const allowedSizes = currentProductSizes.filter(s => sizeMatchesAvailability(s, availability));
 
   return (
@@ -44,15 +47,15 @@ export default function CalcPaymentPanel({
         <div className="text-xs uppercase tracking-widest mb-4" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Условие оплаты</div>
         <div className="space-y-4">
           {PAYMENT_GROUPS.map(group => {
-            const opts = PAYMENT_OPTIONS.filter(o => o.group === group.id);
-            if (!opts.length) return null;
+            const groupOpts = opts.filter(o => o.group === group.id);
+            if (!groupOpts.length) return null;
             return (
               <div key={group.id}>
                 <div className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: "#f57c00", fontFamily: "'Oswald', sans-serif", fontSize: 10 }}>
                   {group.label}
                 </div>
                 <div className="space-y-1.5">
-                  {opts.map(opt => {
+                  {groupOpts.map(opt => {
                     const pct = Math.round((opt.coeff - 1) * 10000) / 100;
                     const pctLabel = pct === 0 ? "базовая" : pct > 0 ? `+${pct}%` : `${pct}%`;
                     const pctColor = pct === 0 ? "#8a9ab5" : pct > 0 ? "#f87171" : "#4ade80";

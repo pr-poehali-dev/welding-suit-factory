@@ -139,6 +139,10 @@ export default function Admin() {
             onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
             <Icon name="Search" size={14} /> SEO
           </a>
+          <a href="/admin/payments" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
+            <Icon name="Calculator" size={14} /> Условия оплаты
+          </a>
           <a href="/admin/promo" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
             onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
             <Icon name="Send" size={14} /> Рассылка

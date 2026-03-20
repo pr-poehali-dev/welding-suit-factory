@@ -17,8 +17,17 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [basePrices, setBasePrices] = useState<Record<string, number>>({});
   const [productNames, setProductNames] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<Record<string, ProductSizeData[]>>({});
+  const [dbPaymentOptions, setDbPaymentOptions] = useState<PaymentOption[] | null>(null);
 
   useEffect(() => {
+    fetch(`${API}?action=payment_options`)
+      .then(r => r.json())
+      .then(data => {
+        const opts = (data.payment_options || []).map((o: { option_id: string; group_id: string; availability: string; label: string; desc: string; coeff: number }) => ({
+          id: o.option_id, group: o.group_id, availability: o.availability, label: o.label, desc: o.desc, coeff: o.coeff,
+        })) as PaymentOption[];
+        if (opts.length > 0) setDbPaymentOptions(opts);
+      });
     fetch(API)
       .then(r => r.json())
       .then(data => {
@@ -58,7 +67,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   }, [productNames, addProduct]);
 
   useEffect(() => {
-    const avail = getPaymentAvailability(payment);
+    const avail = getPaymentAvailability(payment, dbPaymentOptions ?? undefined);
     const sizes = (productSizes[addProduct] || []).filter(s => {
       const q = s.stock_qty ?? 0;
       return avail === "stock" ? q > 0 : q === 0;
@@ -66,7 +75,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     if (sizes.length > 0 && !sizes.some(s => s.size_label === addSize)) {
       setAddSize(sizes[0].size_label);
     }
-  }, [addProduct, productSizes, payment]);
+  }, [addProduct, productSizes, payment, dbPaymentOptions]);
 
   const getStockQty = (product: string, size: string) => {
     return (productSizes[product] || []).find(s => s.size_label === size)?.stock_qty ?? 0;
@@ -162,6 +171,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         basePrices={basePrices}
         productNames={productNames}
         productSizes={productSizes}
+        paymentOptionsOverride={dbPaymentOptions}
         stockWarning={stockWarning}
         dismissWarning={() => setStockWarning("")}
       />
