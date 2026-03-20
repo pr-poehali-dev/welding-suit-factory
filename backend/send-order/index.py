@@ -423,6 +423,7 @@ def handler(event: dict, context) -> dict:
         logo_label = "Да (+15%)" if with_logo else "Нет"
         discount_pct = round(volume_discount * 100) if volume_discount else 0
 
+        td = 'style="padding:5px 8px;border:1px solid #ddd;font-size:12px'
         groups_html = ""
         for g in groups:
             g_payment = g.get("payment", "")
@@ -433,67 +434,61 @@ def handler(event: dict, context) -> dict:
 
             rows = ""
             for item in g_items:
-                unit_price = item.get('unitPrice', 0)
                 rows += f"""
       <tr>
-        <td style="padding:6px;border-bottom:1px solid #eee;color:#222;font-size:13px">{item.get('product','')}</td>
-        <td style="padding:6px;border-bottom:1px solid #eee;color:#666;text-align:center;font-size:13px">{item.get('size','')}</td>
-        <td style="padding:6px;border-bottom:1px solid #eee;text-align:center;font-size:13px">{item.get('qty','')}</td>
-        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;font-size:13px">{unit_price:,} ₽</td>
-        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;font-weight:bold;font-size:13px">{item.get('lineTotal',0):,} ₽</td>
+        <td {td}">{item.get('product','')}</td>
+        <td {td};text-align:center">{item.get('size','')}</td>
+        <td {td};text-align:center">{item.get('qty','')}</td>
+        <td {td};text-align:right;color:#999">{item.get('unitPriceFull', item.get('unitPrice',0)):,}</td>
+        <td {td};text-align:right;font-weight:bold">{item.get('unitPrice',0):,}</td>
+        <td {td};text-align:right;font-weight:bold">{item.get('lineTotal',0):,}</td>
       </tr>"""
 
             groups_html += f"""
-    <div style="margin-bottom:16px">
-      <div style="background:#555;color:#fff;padding:8px 12px;font-size:13px;font-weight:bold;letter-spacing:1px">{pay_label}</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:#f57c00">
-            <th style="padding:6px;color:#fff;text-align:left;font-size:12px">Артикул</th>
-            <th style="padding:6px;color:#fff;text-align:center;font-size:12px">Размер</th>
-            <th style="padding:6px;color:#fff;text-align:center;font-size:12px">Кол-во</th>
-            <th style="padding:6px;color:#fff;text-align:right;font-size:12px">Цена/шт</th>
-            <th style="padding:6px;color:#fff;text-align:right;font-size:12px">Сумма</th>
-          </tr>
-        </thead>
-        <tbody>{rows}</tbody>
-      </table>
-      <div style="text-align:right;padding:8px 12px;background:#f5f5f5;border:1px solid #eee;border-top:none">
-        <span style="color:#666;font-size:13px">Подитог: </span>
-        <span style="color:#f57c00;font-size:15px;font-weight:bold">{g_total:,} ₽</span>
-      </div>
-    </div>"""
+    <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
+      <tr><td colspan="6" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
+      <tr style="background:#f57c00">
+        <th {td};color:#fff">Артикул</th>
+        <th {td};color:#fff;text-align:center">Размер</th>
+        <th {td};color:#fff;text-align:center">Кол-во</th>
+        <th {td};color:#fff;text-align:right">Цена до скидки</th>
+        <th {td};color:#fff;text-align:right">Цена/шт</th>
+        <th {td};color:#fff;text-align:right">Сумма</th>
+      </tr>
+      {rows}
+      <tr style="background:#f5f5f5">
+        <td colspan="5" {td};text-align:right;color:#666">Подитог ({pay_label}):</td>
+        <td {td};text-align:right;font-weight:bold;color:#f57c00;font-size:13px">{g_total:,} ₽</td>
+      </tr>
+    </table>"""
 
-        discount_html = ""
+        footer_rows = ""
         if subtotal != total and discount_pct > 0:
-            discount_html = f"""
-    <div style="text-align:right;padding:6px 12px">
-      <span style="color:#666;font-size:13px">Сумма без скидки: {subtotal:,} ₽</span>
-    </div>
-    <div style="text-align:right;padding:4px 12px">
-      <span style="color:#4CAF50;font-size:13px">Скидка за объём ({discount_pct}%): −{subtotal - total:,} ₽</span>
-    </div>"""
+            footer_rows += f"""
+      <tr><td colspan="5" {td};text-align:right;color:#666;border:none">Сумма без скидки:</td><td {td};text-align:right;color:#666;border:none">{subtotal:,} ₽</td></tr>
+      <tr><td colspan="5" {td};text-align:right;color:#4CAF50;border:none">Скидка за объём ({discount_pct}%):</td><td {td};text-align:right;color:#4CAF50;border:none">−{subtotal - total:,} ₽</td></tr>"""
 
         html = f"""
-<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
-  <div style="background:#f57c00;padding:16px 24px">
-    <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА — Заказ из калькулятора</h1>
-  </div>
-  <div style="background:#f9f9f9;padding:24px;border:1px solid #eee">
-    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-      <tr><td style="padding:6px 0;color:#666;width:180px">Организация</td><td style="padding:6px 0;font-weight:bold;color:#222">{org}</td></tr>
-      <tr><td style="padding:6px 0;color:#666">Контактное лицо</td><td style="padding:6px 0;font-weight:bold;color:#222">{contact}</td></tr>
-      <tr><td style="padding:6px 0;color:#666">Телефон</td><td style="padding:6px 0;font-weight:bold;color:#f57c00;font-size:16px">{phone}</td></tr>
-      <tr><td style="padding:6px 0;color:#666">E-mail</td><td style="padding:6px 0;color:#222">{email or '—'}</td></tr>
-      <tr><td style="padding:6px 0;color:#666">Нанесение логотипа</td><td style="padding:6px 0;color:#222">{logo_label}</td></tr>
-    </table>
-    {groups_html}{discount_html}
-    <div style="text-align:right;margin-top:8px;padding:12px;background:#fff3e0;border-radius:4px">
-      <span style="color:#666;font-size:14px">ИТОГО К ОПЛАТЕ: </span>
-      <span style="color:#f57c00;font-size:22px;font-weight:bold">{total:,} ₽</span>
-    </div>
-  </div>
-  <div style="background:#eee;padding:12px 24px;font-size:12px;color:#999">
+<div style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto">
+  <table style="width:100%;border-collapse:collapse">
+    <tr><td colspan="6" style="background:#f57c00;padding:12px 16px">
+      <span style="color:#fff;font-size:18px;font-weight:bold;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА — Заказ из калькулятора</span>
+    </td></tr>
+    <tr><td colspan="6" style="padding:4px 8px;text-align:right;color:#999;font-size:11px">Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}</td></tr>
+    <tr><td {td};color:#666;width:160px">Организация</td><td colspan="5" {td};font-weight:bold">{org}</td></tr>
+    <tr><td {td};color:#666">Контактное лицо</td><td colspan="5" {td};font-weight:bold">{contact}</td></tr>
+    <tr><td {td};color:#666">Телефон</td><td colspan="5" {td};font-weight:bold;color:#f57c00">{phone}</td></tr>
+    <tr><td {td};color:#666">E-mail</td><td colspan="5" {td}">{email or '—'}</td></tr>
+    <tr><td {td};color:#666">Нанесение логотипа</td><td colspan="5" {td}">{logo_label}</td></tr>
+    {"<tr><td " + td + ";color:#666" + '">Скидка за объём</td><td colspan="5" ' + td + ";color:#4CAF50;font-weight:bold" + '">' + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
+  </table>
+  <div style="height:12px"></div>
+  {groups_html}
+  <table style="width:100%;border-collapse:collapse">
+    {footer_rows}
+    <tr style="background:#fff3e0"><td colspan="5" {td};text-align:right;font-weight:bold;font-size:14px;border:2px solid #f57c00">ИТОГО К ОПЛАТЕ:</td><td {td};text-align:right;font-weight:bold;font-size:16px;color:#f57c00;border:2px solid #f57c00">{total:,} ₽</td></tr>
+  </table>
+  <div style="background:#eee;padding:8px 16px;font-size:11px;color:#999;margin-top:8px">
     Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
   </div>
 </div>"""
