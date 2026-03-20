@@ -26,6 +26,7 @@ export interface CartItem {
   product: string;
   size: string;
   qty: number;
+  paymentId: string;
 }
 
 export function getVolumeDiscount(sum: number): number {
@@ -39,12 +40,12 @@ function getPriceAdd(product: string, size: string, productSizes: Record<string,
   return (productSizes[product] || []).find(s => s.size_label === size)?.price_add ?? 0;
 }
 
-export function calcItemPrice(product: string, size: string, payment: string, withLogo: boolean, basePrices: Record<string, number>, productSizes: Record<string, ProductSizeData[]>, options?: PaymentOption[]): number {
+export function calcItemPrice(product: string, size: string, paymentId: string, withLogo: boolean, basePrices: Record<string, number>, productSizes: Record<string, ProductSizeData[]>, options?: PaymentOption[]): number {
   const base = basePrices[product] ?? 0;
   const priceAdd = getPriceAdd(product, size, productSizes);
   const fullBase = base + priceAdd;
   const opts = options ?? PAYMENT_OPTIONS;
-  const payOpt = opts.find((p) => p.id === payment) ?? opts[0];
+  const payOpt = opts.find((p) => p.id === paymentId) ?? opts[0];
   const priceAfterPayment = fullBase * payOpt.coeff;
   const logoAdd = withLogo ? base * 0.15 : 0;
   return Math.round(priceAfterPayment + logoAdd);
@@ -103,7 +104,6 @@ export default function CalculatorSection({
   const activeOptions = paymentOptionsOverride ?? PAYMENT_OPTIONS;
   const payOpt = activeOptions.find(p => p.id === payment) ?? activeOptions[0];
   const availability = payOpt.availability;
-
   const currentProductSizes = productSizes[addProduct] || [];
 
   const [showModal, setShowModal] = useState(false);
@@ -116,19 +116,31 @@ export default function CalculatorSection({
   const [mError, setMError] = useState("");
 
   const rawRows = cart.map((item) => {
-    const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices, productSizes, activeOptions);
+    const unitPrice = calcItemPrice(item.product, item.size, item.paymentId, withLogo, basePrices, productSizes, activeOptions);
     return { ...item, unitPrice, lineTotal: unitPrice * item.qty };
   });
-  const subtotal = rawRows.reduce((s, r) => s + r.lineTotal, 0);
+
+  const grandSubtotal = rawRows.reduce((s, r) => s + r.lineTotal, 0);
   const totalQty = cart.reduce((s, r) => s + r.qty, 0);
-  const volumeDiscount = getVolumeDiscount(subtotal);
-  const discountAmount = Math.round(subtotal * volumeDiscount);
-  const totalPrice = subtotal - discountAmount;
-  const cartRows = rawRows.map(r => {
+  const volumeDiscount = getVolumeDiscount(grandSubtotal);
+  const grandDiscountAmount = Math.round(grandSubtotal * volumeDiscount);
+  const grandTotal = grandSubtotal - grandDiscountAmount;
+
+  const allCartRows = rawRows.map(r => {
     const finalUnit = Math.round(r.unitPrice * (1 - volumeDiscount));
     const finalLine = finalUnit * r.qty;
     const lineSaving = r.lineTotal - finalLine;
     return { ...r, finalUnit, finalLine, lineSaving };
+  });
+
+  const paymentIds = [...new Set(cart.map(c => c.paymentId))];
+
+  const groups = paymentIds.map(pid => {
+    const po = activeOptions.find(o => o.id === pid) ?? activeOptions[0];
+    const rows = allCartRows.filter(r => r.paymentId === pid);
+    const sub = rows.reduce((s, r) => s + r.unitPrice * r.qty, 0);
+    const subFinal = rows.reduce((s, r) => s + r.finalLine, 0);
+    return { paymentId: pid, payOpt: po, rows, subtotal: sub, total: subFinal };
   });
 
   const handleSendOrder = async () => {
@@ -136,25 +148,27 @@ export default function CalculatorSection({
     setSending(true);
     setMError("");
     try {
-      await fetch(SEND_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "order",
-          orderType: availability,
-          org: mOrg,
-          contact: mContact,
-          phone: mPhone,
-          email: mEmail,
-          payment: payOpt.label,
-          paymentDesc: payOpt.desc,
-          withLogo,
-          subtotal,
-          volumeDiscount,
-          total: totalPrice,
-          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPriceFull: r.unitPrice, unitPrice: r.finalUnit, lineTotal: r.finalLine, saving: r.lineSaving })),
-        }),
-      });
+      for (const g of groups) {
+        await fetch(SEND_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "order",
+            orderType: g.payOpt.availability,
+            org: mOrg,
+            contact: mContact,
+            phone: mPhone,
+            email: mEmail,
+            payment: g.payOpt.label,
+            paymentDesc: g.payOpt.desc,
+            withLogo,
+            subtotal: g.subtotal,
+            volumeDiscount,
+            total: g.total,
+            items: g.rows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPriceFull: r.unitPrice, unitPrice: r.finalUnit, lineTotal: r.finalLine, saving: r.lineSaving })),
+          }),
+        });
+      }
       setSent(true);
     } catch {
       setMError("Ошибка отправки. Позвоните нам напрямую.");
@@ -196,15 +210,48 @@ export default function CalculatorSection({
           />
 
           <div className="lg:col-span-2 flex flex-col gap-5">
-            <CalcCartTable
-              cartRows={cartRows}
-              volumeDiscount={volumeDiscount}
-              productSizes={productSizes}
-              updateSize={updateSize}
-              updateQty={updateQty}
-              removeFromCart={removeFromCart}
-              availability={availability}
-            />
+
+            {groups.length === 0 && (
+              <div className="rounded overflow-hidden" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
+                <div className="px-5 py-10 text-center" style={{ color: "#8a9ab5" }}>
+                  <Icon name="ShoppingCart" size={36} style={{ color: "rgba(138,154,181,0.3)", margin: "0 auto 12px" }} />
+                  <div className="text-sm">Добавьте позиции из каталога или формы слева</div>
+                </div>
+              </div>
+            )}
+
+            {groups.map(g => {
+              const pct = Math.round((g.payOpt.coeff - 1) * 10000) / 100;
+              const pctLabel = pct === 0 ? "базовая" : pct > 0 ? `+${pct}%` : `${pct}%`;
+              const pctColor = pct === 0 ? "#8a9ab5" : pct > 0 ? "#f87171" : "#4ade80";
+              return (
+                <div key={g.paymentId}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Icon name={g.payOpt.availability === "stock" ? "Package" : "Clock"} size={14} style={{ color: "#f57c00" }} />
+                      <span className="text-xs font-bold uppercase tracking-wider" style={{ fontFamily: "'Oswald', sans-serif", color: "#e8e0d0" }}>
+                        {g.payOpt.label}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: `${pctColor}15`, color: pctColor, border: `1px solid ${pctColor}30` }}>
+                        {pctLabel}
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>
+                      {g.total.toLocaleString("ru-RU")} ₽
+                    </div>
+                  </div>
+                  <CalcCartTable
+                    cartRows={g.rows}
+                    volumeDiscount={volumeDiscount}
+                    productSizes={productSizes}
+                    updateSize={updateSize}
+                    updateQty={updateQty}
+                    removeFromCart={removeFromCart}
+                    availability={g.payOpt.availability}
+                  />
+                </div>
+              );
+            })}
 
             {stockWarning && (
               <div className="flex items-center gap-3 px-4 py-3 rounded" style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.3)" }}>
@@ -234,9 +281,9 @@ export default function CalculatorSection({
                     { from: 2_000_000, pct: "10%", label: "2 млн" },
                   ].map((tier) => (
                     <span key={tier.from} className="px-2 py-0.5 text-xs rounded" style={{
-                      background: subtotal >= tier.from ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.05)",
-                      color: subtotal >= tier.from ? "#4ade80" : "#8a9ab5",
-                      border: `1px solid ${subtotal >= tier.from ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)"}`,
+                      background: grandSubtotal >= tier.from ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.05)",
+                      color: grandSubtotal >= tier.from ? "#4ade80" : "#8a9ab5",
+                      border: `1px solid ${grandSubtotal >= tier.from ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)"}`,
                       fontFamily: "'Oswald', sans-serif",
                     }}>
                       {tier.label} → {tier.pct}
@@ -250,14 +297,20 @@ export default function CalculatorSection({
                   <span className="text-sm" style={{ color: "#8a9ab5" }}>Позиций в заказе</span>
                   <span className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{cart.length} арт., {totalQty} шт</span>
                 </div>
+                {groups.map(g => (
+                  <div key={g.paymentId} className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span className="text-sm" style={{ color: "#8a9ab5" }}>{g.payOpt.label} ({g.rows.length} поз.)</span>
+                    <span className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{g.total.toLocaleString("ru-RU")} ₽</span>
+                  </div>
+                ))}
                 <div className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                   <span className="text-sm" style={{ color: "#8a9ab5" }}>Сумма без скидки</span>
-                  <span className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{subtotal.toLocaleString("ru-RU")} ₽</span>
+                  <span className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{grandSubtotal.toLocaleString("ru-RU")} ₽</span>
                 </div>
                 {volumeDiscount > 0 && (
                   <div className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                     <span className="text-sm" style={{ color: "#4ade80" }}>Скидка за объём ({(volumeDiscount * 100).toFixed(0)}%)</span>
-                    <span className="text-sm font-bold" style={{ color: "#4ade80" }}>−{discountAmount.toLocaleString("ru-RU")} ₽</span>
+                    <span className="text-sm font-bold" style={{ color: "#4ade80" }}>−{grandDiscountAmount.toLocaleString("ru-RU")} ₽</span>
                   </div>
                 )}
               </div>
@@ -266,7 +319,7 @@ export default function CalculatorSection({
                 <div>
                   <div className="text-xs mb-1" style={{ color: "#8a9ab5" }}>ИТОГО:</div>
                   <div className="text-4xl font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>
-                    {totalPrice.toLocaleString("ru-RU")} ₽
+                    {grandTotal.toLocaleString("ru-RU")} ₽
                   </div>
                   <div className="text-xs mt-1" style={{ color: "#8a9ab5" }}>без доставки · НДС включён</div>
                 </div>
@@ -289,8 +342,8 @@ export default function CalculatorSection({
       showModal={showModal}
       setShowModal={setShowModal}
       cartLength={cart.length}
-      cartQtySum={cartRows.reduce((s, r) => s + r.qty, 0)}
-      totalPrice={totalPrice}
+      cartQtySum={totalQty}
+      totalPrice={grandTotal}
       sending={sending}
       sent={sent}
       mError={mError}

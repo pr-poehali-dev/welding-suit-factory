@@ -84,7 +84,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const addToCart = () => {
     if (!addProduct) return;
     const stock = getStockQty(addProduct, addSize);
-    const existing = cart.find((item) => item.product === addProduct && item.size === addSize);
+    const existing = cart.find((item) => item.product === addProduct && item.size === addSize && item.paymentId === payment);
 
     let clamped = false;
     if (existing) {
@@ -94,7 +94,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     } else {
       let qty = addQty;
       if (stock > 0 && qty > stock) { qty = stock; clamped = true; }
-      setCart(prev => [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty }]);
+      setCart(prev => [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty, paymentId: payment }]);
     }
 
     if (clamped) {
