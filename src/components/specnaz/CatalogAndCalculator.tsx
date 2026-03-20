@@ -41,7 +41,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
       });
   }, []);
 
-  const [payment, setPayment] = useState("prepayment100");
+  const [payment, setPayment] = useState("stock_prepay_100");
   const [withLogo, setWithLogo] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);

@@ -178,20 +178,36 @@ export const DELIVERY_ZONES = [
   { zone: "СНГ", days: "от 14 дней", cost: "по запросу" },
 ];
 
-// Условия оплаты
-// prepayment100 = базовая цена (100% предоплата)
-// deferred14    = базовая × 1.018
-// deferred30    = базовая × 1.018 × 1.018
-// deferred60    = базовая × 1.018 × 1.018 × 1.018
-// preorder14    = −1.8% от базовой цены (подзаказ 14 дней)
-// preorder30    = −1.8% и ещё −1.6% от уже сниженной суммы (подзаказ 30 дней)
-export const PAYMENT_OPTIONS = [
-  { id: "prepayment100", label: "100% предоплата",  desc: "Базовая цена",                        steps: 0,  sign: 1  },
-  { id: "deferred14",    label: "Отсрочка 14 дней", desc: "+1.8% к базовой",                     steps: 1,  sign: 1  },
-  { id: "deferred30",    label: "Отсрочка 30 дней", desc: "+1.8% от 14-дневной (+3.63% итого)",  steps: 2,  sign: 1  },
-  { id: "deferred60",    label: "Отсрочка 60 дней", desc: "+1.8% от 30-дневной (+5.49% итого)",  steps: 3,  sign: 1  },
-  { id: "preorder14",    label: "Подзаказ 14 дней", desc: "−1.8% от базовой цены",               steps: 1,  sign: -1 },
-  { id: "preorder30",    label: "Подзаказ 30 дней", desc: "−1.8% и ещё −1.6% от суммы",         steps: -1, sign: -1 },
+// Условия оплаты — 4 группы: Наличие+Предоплата, Наличие+Отсрочка, Под заказ+Предоплата, Под заказ+Отсрочка
+// coeff — множитель к базовой цене (1 = базовая, >1 = наценка, <1 = скидка)
+export interface PaymentOption {
+  id: string;
+  group: "stock_prepay" | "stock_deferred" | "order_prepay" | "order_deferred";
+  label: string;
+  desc: string;
+  coeff: number;
+}
+
+export const PAYMENT_GROUPS = [
+  { id: "stock_prepay",    label: "Наличие · Предоплата" },
+  { id: "stock_deferred",  label: "Наличие · Отсрочка" },
+  { id: "order_prepay",    label: "Под заказ · Предоплата" },
+  { id: "order_deferred",  label: "Под заказ · Отсрочка" },
+] as const;
+
+export const PAYMENT_OPTIONS: PaymentOption[] = [
+  // Наличие + Предоплата
+  { id: "stock_prepay_100",  group: "stock_prepay",   label: "100% предоплата",         desc: "Базовая цена",          coeff: 1 },
+  // Наличие + Отсрочка
+  { id: "stock_def_14",      group: "stock_deferred",  label: "Отсрочка 14 дней",       desc: "+1.8% к базовой",       coeff: 1.018 },
+  { id: "stock_def_30",      group: "stock_deferred",  label: "Отсрочка 30 дней",       desc: "+3.63% к базовой",      coeff: 1.0363 },
+  { id: "stock_def_60",      group: "stock_deferred",  label: "Отсрочка 60 дней",       desc: "+5.49% к базовой",      coeff: 1.0549 },
+  // Под заказ + Предоплата
+  { id: "order_prepay_14",   group: "order_prepay",    label: "Подзаказ 14 дней",       desc: "−1.8% от базовой",      coeff: 0.982 },
+  { id: "order_prepay_30",   group: "order_prepay",    label: "Подзаказ 30 дней",       desc: "−3.37% от базовой",     coeff: 0.9663 },
+  // Под заказ + Отсрочка
+  { id: "order_def_30",      group: "order_deferred",  label: "Подзаказ + отсрочка 30д", desc: "+4.43% к базовой",     coeff: 1.0443 },
+  { id: "order_def_60",      group: "order_deferred",  label: "Подзаказ + отсрочка 60д", desc: "+6.29% к базовой",     coeff: 1.0629 },
 ];
 
 // Скидка от суммы заказа (рублей)

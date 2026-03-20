@@ -400,16 +400,22 @@ export default function AdminProductForm({
               </div>
 
               <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
-                {formSizes.map((sz, idx) => (
-                  <div key={idx} className="grid items-center gap-1.5 p-2 rounded"
-                    style={{ gridTemplateColumns: "1fr 100px", background: "#0d1117", border: "1px solid rgba(255,255,255,0.05)", opacity: sz.is_available ? 1 : 0.4 }}>
-                    <div className="text-sm" style={{ color: "#e8e0d0" }}>{sz.size_label}</div>
-                    <input type="text" inputMode="numeric" className="w-full px-2 py-1.5 rounded text-sm text-center outline-none"
-                      style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", color: sz.stock_qty > 0 ? "#4ade80" : "#e8e0d0" }}
-                      value={sz.stock_qty || ""}
-                      onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ""); updateSize(idx, "stock_qty", v === "" ? 0 : parseInt(v, 10)); }} />
-                  </div>
-                ))}
+                {formSizes.map((sz, idx) => {
+                  const q = sz.stock_qty || 0;
+                  const clr = !sz.is_available || q === 0 ? "#f87171" : q < 20 ? "#facc15" : q <= 100 ? "#4ade80" : "#60a5fa";
+                  const bg = !sz.is_available || q === 0 ? "rgba(248,113,113,0.06)" : q < 20 ? "rgba(250,204,21,0.06)" : q <= 100 ? "rgba(74,222,128,0.06)" : "rgba(96,165,250,0.06)";
+                  const bdr = !sz.is_available || q === 0 ? "rgba(248,113,113,0.2)" : q < 20 ? "rgba(250,204,21,0.2)" : q <= 100 ? "rgba(74,222,128,0.2)" : "rgba(96,165,250,0.2)";
+                  return (
+                    <div key={idx} className="grid items-center gap-1.5 p-2 rounded"
+                      style={{ gridTemplateColumns: "1fr 100px", background: bg, border: `1px solid ${bdr}` }}>
+                      <div className="text-sm" style={{ color: clr }}>{sz.size_label}</div>
+                      <input type="text" inputMode="numeric" className="w-full px-2 py-1.5 rounded text-sm text-center outline-none"
+                        style={{ background: "#13181f", border: `1px solid ${bdr}`, color: clr }}
+                        value={sz.stock_qty || ""}
+                        onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ""); updateSize(idx, "stock_qty", v === "" ? 0 : parseInt(v, 10)); }} />
+                    </div>
+                  );
+                })}
               </div>
 
               {formSizes.length === 0 && (

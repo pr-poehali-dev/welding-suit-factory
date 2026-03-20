@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS } from "./constants";
+import { PAYMENT_OPTIONS, PAYMENT_GROUPS, VOLUME_DISCOUNTS } from "./constants";
 
 const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
 
@@ -35,18 +35,7 @@ export function calcItemPrice(product: string, size: string, payment: string, wi
   const fullBase = base + priceAdd;
 
   const payOpt = PAYMENT_OPTIONS.find((p) => p.id === payment) ?? PAYMENT_OPTIONS[0];
-  let priceAfterPayment: number;
-
-  if (payOpt.id === "preorder30") {
-    priceAfterPayment = fullBase * (1 - 0.018) * (1 - 0.016);
-  } else if (payOpt.sign === 1 && payOpt.steps > 0) {
-    priceAfterPayment = fullBase * Math.pow(1.018, payOpt.steps);
-  } else if (payOpt.sign === -1 && payOpt.id === "preorder14") {
-    priceAfterPayment = fullBase * (1 - 0.018);
-  } else {
-    priceAfterPayment = fullBase;
-  }
-
+  const priceAfterPayment = fullBase * payOpt.coeff;
   const logoAdd = withLogo ? base * 0.15 : 0;
   return Math.round(priceAfterPayment + logoAdd);
 }
@@ -167,33 +156,42 @@ export default function CalculatorSection({
             {/* Условие оплаты */}
             <div className="rounded p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
               <div className="text-xs uppercase tracking-widest mb-4" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Условие оплаты</div>
-              <div className="space-y-2">
-                {PAYMENT_OPTIONS.map((opt) => (
-                  <label key={opt.id} className="flex items-center justify-between gap-3 p-3 rounded cursor-pointer transition-all" style={{
-                    background: payment === opt.id ? "rgba(245,124,0,0.1)" : "#0d1117",
-                    border: `1px solid ${payment === opt.id ? "rgba(245,124,0,0.4)" : "rgba(255,255,255,0.06)"}`,
-                  }}>
-                    <div className="flex items-center gap-3">
-                      <input type="radio" name="payment" checked={payment === opt.id} onChange={() => setPayment(opt.id)} style={{ accentColor: "#f57c00" }} />
-                      <div>
-                        <div className="text-sm" style={{ color: payment === opt.id ? "#e8e0d0" : "#8a9ab5" }}>{opt.label}</div>
-                        <div className="text-xs mt-0.5" style={{ color: "#8a9ab5" }}>{opt.desc}</div>
+              <div className="space-y-4">
+                {PAYMENT_GROUPS.map(group => {
+                  const opts = PAYMENT_OPTIONS.filter(o => o.group === group.id);
+                  if (!opts.length) return null;
+                  return (
+                    <div key={group.id}>
+                      <div className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: "#f57c00", fontFamily: "'Oswald', sans-serif", fontSize: 10 }}>
+                        {group.label}
+                      </div>
+                      <div className="space-y-1.5">
+                        {opts.map(opt => {
+                          const pct = Math.round((opt.coeff - 1) * 10000) / 100;
+                          const pctLabel = pct === 0 ? "базовая" : pct > 0 ? `+${pct}%` : `${pct}%`;
+                          const pctColor = pct === 0 ? "#8a9ab5" : pct > 0 ? "#f87171" : "#4ade80";
+                          return (
+                            <label key={opt.id} className="flex items-center justify-between gap-3 p-3 rounded cursor-pointer transition-all" style={{
+                              background: payment === opt.id ? "rgba(245,124,0,0.1)" : "#0d1117",
+                              border: `1px solid ${payment === opt.id ? "rgba(245,124,0,0.4)" : "rgba(255,255,255,0.06)"}`,
+                            }}>
+                              <div className="flex items-center gap-3">
+                                <input type="radio" name="payment" checked={payment === opt.id} onChange={() => setPayment(opt.id)} style={{ accentColor: "#f57c00" }} />
+                                <div>
+                                  <div className="text-sm" style={{ color: payment === opt.id ? "#e8e0d0" : "#8a9ab5" }}>{opt.label}</div>
+                                  <div className="text-xs mt-0.5" style={{ color: "#8a9ab5" }}>{opt.desc}</div>
+                                </div>
+                              </div>
+                              <span className="text-xs font-bold ml-auto whitespace-nowrap" style={{ color: pctColor }}>
+                                {pctLabel}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
-                    <span className="text-xs font-bold ml-auto whitespace-nowrap" style={{
-                      color: opt.id === "prepayment100" ? "#8a9ab5"
-                        : opt.sign === 1 ? "#f87171"
-                        : "#4ade80",
-                    }}>
-                      {opt.id === "prepayment100" && "базовая"}
-                      {opt.id === "deferred14"    && "+1.8%"}
-                      {opt.id === "deferred30"    && "+3.63%"}
-                      {opt.id === "deferred60"    && "+5.49%"}
-                      {opt.id === "preorder14"    && "−1.8%"}
-                      {opt.id === "preorder30"    && "−3.36%"}
-                    </span>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
 
               <label className="flex items-center gap-3 cursor-pointer mt-3 p-3 rounded" style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)" }}>
