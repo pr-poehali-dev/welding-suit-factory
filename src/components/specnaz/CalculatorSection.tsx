@@ -1,6 +1,8 @@
 import { useState } from "react";
-import Icon from "@/components/ui/icon";
-import { PAYMENT_OPTIONS, PAYMENT_GROUPS, VOLUME_DISCOUNTS } from "./constants";
+import { PAYMENT_OPTIONS, VOLUME_DISCOUNTS } from "./constants";
+import CalcPaymentPanel from "./CalcPaymentPanel";
+import CalcCartTable from "./CalcCartTable";
+import CalcOrderModal from "./CalcOrderModal";
 
 const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
 
@@ -11,7 +13,7 @@ export interface ProductSizeData {
   stock_qty?: number;
 }
 
-function stockInfo(qty: number) {
+export function stockInfo(qty: number) {
   if (qty === 0) return { color: "#f87171", label: "Под заказ" };
   if (qty < 20)  return { color: "#facc15", label: "Мало" };
   if (qty <= 100) return { color: "#4ade80", label: "В наличии" };
@@ -159,222 +161,34 @@ export default function CalculatorSection({
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Левая панель: условия + добавление позиции */}
-          <div className="lg:col-span-1 space-y-5">
-
-            {/* Условие оплаты */}
-            <div className="rounded p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
-              <div className="text-xs uppercase tracking-widest mb-4" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Условие оплаты</div>
-              <div className="space-y-4">
-                {PAYMENT_GROUPS.map(group => {
-                  const opts = PAYMENT_OPTIONS.filter(o => o.group === group.id);
-                  if (!opts.length) return null;
-                  return (
-                    <div key={group.id}>
-                      <div className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: "#f57c00", fontFamily: "'Oswald', sans-serif", fontSize: 10 }}>
-                        {group.label}
-                      </div>
-                      <div className="space-y-1.5">
-                        {opts.map(opt => {
-                          const pct = Math.round((opt.coeff - 1) * 10000) / 100;
-                          const pctLabel = pct === 0 ? "базовая" : pct > 0 ? `+${pct}%` : `${pct}%`;
-                          const pctColor = pct === 0 ? "#8a9ab5" : pct > 0 ? "#f87171" : "#4ade80";
-                          return (
-                            <label key={opt.id} className="flex items-center justify-between gap-3 p-3 rounded cursor-pointer transition-all" style={{
-                              background: payment === opt.id ? "rgba(245,124,0,0.1)" : "#0d1117",
-                              border: `1px solid ${payment === opt.id ? "rgba(245,124,0,0.4)" : "rgba(255,255,255,0.06)"}`,
-                            }}>
-                              <div className="flex items-center gap-3">
-                                <input type="radio" name="payment" checked={payment === opt.id} onChange={() => setPayment(opt.id)} style={{ accentColor: "#f57c00" }} />
-                                <div>
-                                  <div className="text-sm" style={{ color: payment === opt.id ? "#e8e0d0" : "#8a9ab5" }}>{opt.label}</div>
-                                  <div className="text-xs mt-0.5" style={{ color: "#8a9ab5" }}>{opt.desc}</div>
-                                </div>
-                              </div>
-                              <span className="text-xs font-bold ml-auto whitespace-nowrap" style={{ color: pctColor }}>
-                                {pctLabel}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <label className="flex items-center gap-3 cursor-pointer mt-3 p-3 rounded" style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <input type="checkbox" checked={withLogo} onChange={(e) => setWithLogo(e.target.checked)} style={{ accentColor: "#f57c00", width: 16, height: 16 }} />
-                <span className="text-sm" style={{ color: "#c8bca8" }}>Нанесение логотипа <span style={{ color: "#f57c00" }}>+15%</span></span>
-              </label>
-            </div>
-
-            {/* Добавить позицию */}
-            <div className="rounded p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
-              <div className="text-xs uppercase tracking-widest mb-4" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Добавить позицию</div>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Артикул</label>
-                  <select value={addProduct} onChange={(e) => setAddProduct(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0", outline: "none" }}>
-                    {productNames.map((k) => <option key={k} value={k}>{k}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Размер / Рост (ГОСТ)</label>
-                  {(() => { const asi = stockInfo(currentProductSizes.find(s => s.size_label === addSize)?.stock_qty ?? 0); return (
-                    <>
-                      <select value={addSize} onChange={(e) => setAddSize(e.target.value)} className="w-full px-3 py-2.5 text-sm rounded" style={{ background: "#0d1117", border: `1px solid ${asi.color}40`, color: asi.color, outline: "none" }}>
-                        {currentProductSizes.map((s) => {
-                          const si = stockInfo(s.stock_qty ?? 0);
-                          return (
-                            <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#0d1117" }}>
-                              {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: asi.color }} />
-                        <span className="text-xs" style={{ color: asi.color }}>{asi.label}</span>
-                      </div>
-                    </>
-                  ); })()}
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: "#8a9ab5" }}>Количество, шт</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={addQty}
-                    onChange={(e) => setAddQty(Math.max(1, Number(e.target.value)))}
-                    className="w-full px-3 py-2.5 text-sm rounded"
-                    style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0", outline: "none" }}
-                  />
-                </div>
-                <button
-                  className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
-                  onClick={addToCart}
-                >
-                  <Icon name="Plus" size={16} />
-                  Добавить в заказ
-                </button>
-              </div>
-            </div>
-          </div>
+          <CalcPaymentPanel
+            payment={payment}
+            setPayment={setPayment}
+            withLogo={withLogo}
+            setWithLogo={setWithLogo}
+            addProduct={addProduct}
+            setAddProduct={setAddProduct}
+            addSize={addSize}
+            setAddSize={setAddSize}
+            addQty={addQty}
+            setAddQty={setAddQty}
+            addToCart={addToCart}
+            productNames={productNames}
+            currentProductSizes={currentProductSizes}
+          />
 
           {/* Правая панель: корзина + итог */}
           <div className="lg:col-span-2 flex flex-col gap-5">
 
             {/* Таблица позиций */}
-            <div className="rounded overflow-hidden" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
-              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(245,124,0,0.15)" }}>
-                <div className="text-xs uppercase tracking-widest" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>
-                  Позиции заказа
-                </div>
-                <div className="flex items-center gap-2">
-                  <Icon name="ShoppingCart" size={16} style={{ color: "#f57c00" }} />
-                  <span className="text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>{cart.length} поз.</span>
-                </div>
-              </div>
-
-              {cart.length === 0 ? (
-                <div className="px-5 py-10 text-center" style={{ color: "#8a9ab5" }}>
-                  <Icon name="ShoppingCart" size={36} style={{ color: "rgba(138,154,181,0.3)", margin: "0 auto 12px" }} />
-                  <div className="text-sm">Добавьте позиции из каталога или формы слева</div>
-                </div>
-              ) : (
-                <div>
-                  {/* Заголовок таблицы */}
-                  <div className="hidden md:grid grid-cols-12 px-5 py-2 text-xs uppercase tracking-wider" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <div className="col-span-4">Артикул</div>
-                    <div className="col-span-3">Размер</div>
-                    <div className="col-span-2 text-center">Кол-во</div>
-                    <div className="col-span-2 text-right">Сумма</div>
-                    <div className="col-span-1" />
-                  </div>
-
-                  {cartRows.map((item, idx) => (
-                    <div
-                      key={item.id}
-                      className="px-5 py-3 grid grid-cols-12 gap-2 items-center"
-                      style={{ borderBottom: idx < cartRows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}
-                    >
-                      {/* Артикул */}
-                      <div className="col-span-12 md:col-span-4">
-                        <div className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{item.product}</div>
-                        <div className="text-xs mt-0.5 flex items-center gap-2">
-                          <span style={{ color: "#f57c00" }}>{item.finalUnit.toLocaleString("ru-RU")} ₽/шт</span>
-                          {volumeDiscount > 0 && (
-                            <span style={{ color: "#8a9ab5", textDecoration: "line-through", fontSize: 10 }}>{item.unitPrice.toLocaleString("ru-RU")}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Размер */}
-                      <div className="col-span-6 md:col-span-3">
-                        {(() => { const csi = stockInfo((productSizes[item.product] || []).find(s => s.size_label === item.size)?.stock_qty ?? 0); return (
-                          <>
-                            <select
-                              value={item.size}
-                              onChange={(e) => updateSize(item.id, e.target.value)}
-                              className="w-full px-2 py-1.5 text-xs rounded"
-                              style={{ background: "#0d1117", border: `1px solid ${csi.color}40`, color: csi.color, outline: "none" }}
-                            >
-                              {(productSizes[item.product] || []).map((s) => {
-                                const si = stockInfo(s.stock_qty ?? 0);
-                                return (
-                                  <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#0d1117" }}>
-                                    {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: csi.color }} />
-                              <span style={{ color: csi.color, fontSize: 10 }}>{csi.label}</span>
-                            </div>
-                          </>
-                        ); })()}
-                      </div>
-
-                      {/* Количество */}
-                      <div className="col-span-3 md:col-span-2 flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => updateQty(item.id, item.qty - 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-xs"
-                          style={{ background: "rgba(245,124,0,0.15)", color: "#f57c00", border: "none", cursor: "pointer" }}
-                        >−</button>
-                        <span className="text-sm font-medium w-8 text-center" style={{ color: "#e8e0d0" }}>{item.qty}</span>
-                        <button
-                          onClick={() => updateQty(item.id, item.qty + 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-xs"
-                          style={{ background: "rgba(245,124,0,0.15)", color: "#f57c00", border: "none", cursor: "pointer" }}
-                        >+</button>
-                      </div>
-
-                      {/* Сумма */}
-                      <div className="col-span-2 md:col-span-2 text-right">
-                        <div className="text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
-                          {item.finalLine.toLocaleString("ru-RU")} ₽
-                        </div>
-                        {item.lineSaving > 0 && (
-                          <div className="text-xs" style={{ color: "#4ade80" }}>−{item.lineSaving.toLocaleString("ru-RU")} ₽</div>
-                        )}
-                      </div>
-
-                      {/* Удалить */}
-                      <div className="col-span-1 flex justify-end">
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          style={{ background: "none", border: "none", color: "#8a9ab5", cursor: "pointer" }}
-                        >
-                          <Icon name="Trash2" size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <CalcCartTable
+              cartRows={cartRows}
+              volumeDiscount={volumeDiscount}
+              productSizes={productSizes}
+              updateSize={updateSize}
+              updateQty={updateQty}
+              removeFromCart={removeFromCart}
+            />
 
             {/* Итоговый блок */}
             <div className="rounded p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
@@ -446,74 +260,25 @@ export default function CalculatorSection({
     </section>
 
     {/* Модалка отправки заказа */}
-    {showModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.75)" }}
-        onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
-        <div className="w-full max-w-md rounded-lg overflow-hidden" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.3)" }}>
-
-          {/* Шапка */}
-          <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid rgba(245,124,0,0.2)" }}>
-            <h3 className="font-bold text-lg uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
-              Оформить заявку
-            </h3>
-            <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#8a9ab5", cursor: "pointer" }}>
-              <Icon name="X" size={20} />
-            </button>
-          </div>
-
-          <div className="px-6 py-5">
-            {sent ? (
-              <div className="flex flex-col items-center py-8 text-center">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
-                  <Icon name="CheckCircle" size={28} style={{ color: "#4ade80" }} />
-                </div>
-                <div className="text-xl font-bold mb-2" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>Заявка отправлена!</div>
-                <div className="text-sm mb-1" style={{ color: "#8a9ab5" }}>Сумма заказа: <span style={{ color: "#f57c00", fontWeight: "bold" }}>{totalPrice.toLocaleString("ru-RU")} ₽</span></div>
-                <div className="text-sm" style={{ color: "#8a9ab5" }}>Менеджер свяжется с вами в течение 2 часов</div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Краткий итог */}
-                <div className="p-3 rounded text-sm flex justify-between" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.15)" }}>
-                  <span style={{ color: "#8a9ab5" }}>{cart.length} позиц. · {cartRows.reduce((s,r) => s+r.qty,0)} шт</span>
-                  <span className="font-bold" style={{ color: "#f57c00" }}>{totalPrice.toLocaleString("ru-RU")} ₽</span>
-                </div>
-
-                <div>
-                  <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Организация</label>
-                  <input type="text" value={mOrg} onChange={e => setMOrg(e.target.value)} placeholder="ООО «Название»" className="w-full px-3 py-2.5 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.25)", color: "#e8e0d0", outline: "none" }} />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Контактное лицо</label>
-                  <input type="text" value={mContact} onChange={e => setMContact(e.target.value)} placeholder="Иван Иванов" className="w-full px-3 py-2.5 rounded text-sm" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.25)", color: "#e8e0d0", outline: "none" }} />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Телефон *</label>
-                  <input type="tel" value={mPhone} onChange={e => setMPhone(e.target.value)} placeholder="+7 (___) ___-__-__" className="w-full px-3 py-2.5 rounded text-sm" style={{ background: "#0d1117", border: `1px solid ${mError ? "rgba(248,113,113,0.5)" : "rgba(245,124,0,0.25)"}`, color: "#e8e0d0", outline: "none" }} />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest mb-1.5" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>E-mail *</label>
-                  <input type="email" value={mEmail} onChange={e => setMEmail(e.target.value)} placeholder="example@company.ru" className="w-full px-3 py-2.5 rounded text-sm" style={{ background: "#0d1117", border: `1px solid ${mError ? "rgba(248,113,113,0.5)" : "rgba(245,124,0,0.25)"}`, color: "#e8e0d0", outline: "none" }} />
-                </div>
-
-                {mError && <div className="text-sm" style={{ color: "#f87171" }}>{mError}</div>}
-
-                <button onClick={handleSendOrder} disabled={sending} className="w-full py-3 text-sm font-bold rounded"
-                  style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: sending ? "default" : "pointer", opacity: sending ? 0.7 : 1 }}>
-                  {sending ? "Отправляем..." : "Отправить заказ на почту"}
-                </button>
-                <p className="text-xs text-center" style={{ color: "#8a9ab5" }}>
-                  Нажимая кнопку, вы соглашаетесь с{" "}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#f57c00", textDecoration: "underline" }}>
-                    политикой обработки данных
-                  </a>
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )}
+    <CalcOrderModal
+      showModal={showModal}
+      setShowModal={setShowModal}
+      cartLength={cart.length}
+      cartQtySum={cartRows.reduce((s, r) => s + r.qty, 0)}
+      totalPrice={totalPrice}
+      sending={sending}
+      sent={sent}
+      mError={mError}
+      mOrg={mOrg}
+      setMOrg={setMOrg}
+      mContact={mContact}
+      setMContact={setMContact}
+      mPhone={mPhone}
+      setMPhone={setMPhone}
+      mEmail={mEmail}
+      setMEmail={setMEmail}
+      handleSendOrder={handleSendOrder}
+    />
     </>
   );
 }
