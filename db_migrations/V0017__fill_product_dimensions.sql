@@ -1,0 +1,2 @@
+UPDATE products SET pack_length = 60.0, pack_width = 40.0, pack_height = 15.0, unit_weight = 1.8 WHERE id = 7;
+UPDATE products SET pack_length = 60.0, pack_width = 40.0, pack_height = 15.0, unit_weight = 1.8 WHERE id = 2;
