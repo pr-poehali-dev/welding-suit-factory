@@ -16,7 +16,7 @@ export default function CalcPaymentPanel({
   const opts = paymentOptions ?? PAYMENT_OPTIONS;
 
   return (
-    <div className="rounded p-4" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", height: "100%" }}>
+    <div className="rounded p-3" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", height: "100%" }}>
       <div className="text-xs uppercase tracking-widest mb-3" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Условие оплаты</div>
       <div className="space-y-3">
         {PAYMENT_GROUPS.map(group => {

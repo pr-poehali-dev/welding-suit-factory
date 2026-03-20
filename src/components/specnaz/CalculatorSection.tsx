@@ -191,7 +191,7 @@ export default function CalculatorSection({
           <p style={{ color: "#8a9ab5" }}>Добавляйте несколько артикулов и размеров — калькулятор посчитает итог</p>
         </div>
 
-        <div className="grid lg:grid-cols-5 gap-4">
+        <div className="grid lg:grid-cols-8 gap-4">
           <div className="lg:col-span-2">
             <CalcPaymentPanel
               payment={payment}
@@ -216,7 +216,7 @@ export default function CalculatorSection({
             />
           </div>
 
-          <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="lg:col-span-4 flex flex-col gap-4">
 
             {groups.length === 0 && (
               <div className="rounded overflow-hidden" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
