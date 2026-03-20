@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { PAYMENT_OPTIONS, PAYMENT_GROUPS, VOLUME_DISCOUNTS, type PaymentOption } from "./constants";
 import CalcPaymentPanel from "./CalcPaymentPanel";
+import CalcAddItem from "./CalcAddItem";
 import CalcCartTable from "./CalcCartTable";
 import CalcOrderModal from "./CalcOrderModal";
 
@@ -190,26 +191,32 @@ export default function CalculatorSection({
           <p style={{ color: "#8a9ab5" }}>Добавляйте несколько артикулов и размеров — калькулятор посчитает итог</p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <CalcPaymentPanel
-            payment={payment}
-            setPayment={setPayment}
-            withLogo={withLogo}
-            setWithLogo={setWithLogo}
-            paymentOptions={activeOptions}
-            addProduct={addProduct}
-            setAddProduct={setAddProduct}
-            addSize={addSize}
-            setAddSize={setAddSize}
-            addQty={addQty}
-            setAddQty={setAddQty}
-            addToCart={addToCart}
-            productNames={productNames}
-            currentProductSizes={currentProductSizes}
-            availability={availability}
-          />
+        <div className="grid lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-2">
+            <CalcPaymentPanel
+              payment={payment}
+              setPayment={setPayment}
+              withLogo={withLogo}
+              setWithLogo={setWithLogo}
+              paymentOptions={activeOptions}
+            />
+          </div>
+          <div className="lg:col-span-1">
+            <CalcAddItem
+              addProduct={addProduct}
+              setAddProduct={setAddProduct}
+              addSize={addSize}
+              setAddSize={setAddSize}
+              addQty={addQty}
+              setAddQty={setAddQty}
+              addToCart={addToCart}
+              productNames={productNames}
+              currentProductSizes={currentProductSizes}
+              availability={availability}
+            />
+          </div>
 
-          <div className="lg:col-span-2 flex flex-col gap-5">
+          <div className="lg:col-span-2 flex flex-col gap-4">
 
             {groups.length === 0 && (
               <div className="rounded overflow-hidden" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
