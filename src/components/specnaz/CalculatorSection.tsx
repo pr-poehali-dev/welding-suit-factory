@@ -74,6 +74,7 @@ interface CalculatorSectionProps {
   basePrices: Record<string, number>;
   productNames: string[];
   productSizes: Record<string, ProductSizeData[]>;
+  stockWarning?: string;
 }
 
 export default function CalculatorSection({
@@ -91,6 +92,7 @@ export default function CalculatorSection({
   basePrices,
   productNames,
   productSizes,
+  stockWarning,
 }: CalculatorSectionProps) {
   const payOpt = PAYMENT_OPTIONS.find(p => p.id === payment) ?? PAYMENT_OPTIONS[0];
   const availability = payOpt.availability;
@@ -186,6 +188,12 @@ export default function CalculatorSection({
           />
 
           <div className="lg:col-span-2 flex flex-col gap-5">
+            {stockWarning && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded" style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.3)" }}>
+                <Icon name="AlertTriangle" size={18} style={{ color: "#facc15", flexShrink: 0 }} />
+                <span className="text-sm" style={{ color: "#facc15" }}>{stockWarning}</span>
+              </div>
+            )}
             <CalcCartTable
               cartRows={cartRows}
               volumeDiscount={volumeDiscount}

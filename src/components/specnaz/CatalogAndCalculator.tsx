@@ -45,6 +45,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [withLogo, setWithLogo] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [stockWarning, setStockWarning] = useState("");
 
   const [addProduct, setAddProduct] = useState("");
   const [addSize, setAddSize] = useState("");
@@ -71,23 +72,23 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     return (productSizes[product] || []).find(s => s.size_label === size)?.stock_qty ?? 0;
   };
 
-  const clampQty = (product: string, size: string, qty: number) => {
-    const stock = getStockQty(product, size);
-    if (stock > 0 && qty > stock) return stock;
-    return qty;
+  const showWarn = (product: string, size: string, stock: number) => {
+    setStockWarning(`${product} (${size}) — на складе только ${stock} шт, количество скорректировано`);
+    setTimeout(() => setStockWarning(""), 4000);
   };
 
   const addToCart = () => {
     if (!addProduct) return;
+    const stock = getStockQty(addProduct, addSize);
     setCart((prev) => {
       const existing = prev.find((item) => item.product === addProduct && item.size === addSize);
       if (existing) {
-        const newQty = clampQty(addProduct, addSize, existing.qty + addQty);
-        return prev.map((item) =>
-          item.id === existing.id ? { ...item, qty: newQty } : item
-        );
+        let newQty = existing.qty + addQty;
+        if (stock > 0 && newQty > stock) { newQty = stock; showWarn(addProduct, addSize, stock); }
+        return prev.map((item) => item.id === existing.id ? { ...item, qty: newQty } : item);
       }
-      const qty = clampQty(addProduct, addSize, addQty);
+      let qty = addQty;
+      if (stock > 0 && qty > stock) { qty = stock; showWarn(addProduct, addSize, stock); }
       return [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty }];
     });
   };
@@ -100,7 +101,9 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     if (qty < 1) return;
     setCart((prev) => prev.map((item) => {
       if (item.id !== id) return item;
-      return { ...item, qty: clampQty(item.product, item.size, qty) };
+      const stock = getStockQty(item.product, item.size);
+      if (stock > 0 && qty > stock) { showWarn(item.product, item.size, stock); return { ...item, qty: stock }; }
+      return { ...item, qty };
     }));
   };
 
@@ -156,6 +159,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         basePrices={basePrices}
         productNames={productNames}
         productSizes={productSizes}
+        stockWarning={stockWarning}
       />
     </>
   );
