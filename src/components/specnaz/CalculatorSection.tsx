@@ -180,7 +180,7 @@ export default function CalculatorSection({
   return (
     <>
     <section id="calculator" className="py-24" style={{ background: "#0a0e14" }}>
-      <div className="max-w-6xl mx-auto px-4 md:px-8">
+      <div className="mx-auto px-4 md:px-6 lg:px-8">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div style={{ width: 32, height: 2, background: "#f57c00" }} />
