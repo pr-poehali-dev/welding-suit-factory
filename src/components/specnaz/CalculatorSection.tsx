@@ -149,27 +149,29 @@ export default function CalculatorSection({
     setSending(true);
     setMError("");
     try {
-      for (const g of groups) {
-        await fetch(SEND_API, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: "order",
-            orderType: g.payOpt.availability,
-            org: mOrg,
-            contact: mContact,
-            phone: mPhone,
-            email: mEmail,
+      await fetch(SEND_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "order",
+          org: mOrg,
+          contact: mContact,
+          phone: mPhone,
+          email: mEmail,
+          withLogo,
+          subtotal: grandSubtotal,
+          volumeDiscount,
+          total: grandTotal,
+          groups: groups.map(g => ({
             payment: g.payOpt.label,
             paymentDesc: g.payOpt.desc,
-            withLogo,
+            orderType: g.payOpt.availability,
             subtotal: g.subtotal,
-            volumeDiscount,
             total: g.total,
             items: g.rows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPriceFull: r.unitPrice, unitPrice: r.finalUnit, lineTotal: r.finalLine, saving: r.lineSaving })),
-          }),
-        });
-      }
+          })),
+        }),
+      });
       setSent(true);
     } catch {
       setMError("Ошибка отправки. Позвоните нам напрямую.");
