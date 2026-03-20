@@ -101,8 +101,8 @@ def handler(event: dict, context) -> dict:
 
         if params.get("action") == "sizes":
             product_id = int(params.get("product_id", 0))
-            cur.execute(f"SELECT id, size_label, price_add, is_available, gtin FROM {SCHEMA}.product_sizes WHERE product_id=%s ORDER BY id", (product_id,))
-            rows = [{"id": r[0], "size_label": r[1], "price_add": r[2], "is_available": r[3], "gtin": r[4] or ""} for r in cur.fetchall()]
+            cur.execute(f"SELECT id, size_label, price_add, is_available, gtin, stock_qty FROM {SCHEMA}.product_sizes WHERE product_id=%s ORDER BY id", (product_id,))
+            rows = [{"id": r[0], "size_label": r[1], "price_add": r[2], "is_available": r[3], "gtin": r[4] or "", "stock_qty": r[5]} for r in cur.fetchall()]
             conn.close()
             return ok({"sizes": rows})
 
@@ -132,10 +132,10 @@ def handler(event: dict, context) -> dict:
             for p in products:
                 p["images"] = imgs.get(p["id"], [])
 
-            cur.execute(f"SELECT id, product_id, size_label, price_add, is_available, gtin FROM {SCHEMA}.product_sizes WHERE product_id IN ({','.join(ids)})")
+            cur.execute(f"SELECT id, product_id, size_label, price_add, is_available, gtin, stock_qty FROM {SCHEMA}.product_sizes WHERE product_id IN ({','.join(ids)})")
             szs = {}
             for r in cur.fetchall():
-                szs.setdefault(r[1], []).append({"id": r[0], "size_label": r[2], "price_add": r[3], "is_available": r[4], "gtin": r[5] or ""})
+                szs.setdefault(r[1], []).append({"id": r[0], "size_label": r[2], "price_add": r[3], "is_available": r[4], "gtin": r[5] or "", "stock_qty": r[6]})
             for p in products:
                 p["sizes"] = szs.get(p["id"], [])
 
@@ -190,12 +190,13 @@ def handler(event: dict, context) -> dict:
             conn = get_conn()
             cur  = conn.cursor()
             gtin_sz = body.get("gtin", "")[:13]
+            stock_qty = int(body.get("stock_qty", 0))
             if body.get("id"):
-                cur.execute(f"UPDATE {SCHEMA}.product_sizes SET size_label=%s, price_add=%s, is_available=%s, gtin=%s WHERE id=%s",
-                            (body["size_label"], int(body.get("price_add", 0)), bool(body.get("is_available", True)), gtin_sz, int(body["id"])))
+                cur.execute(f"UPDATE {SCHEMA}.product_sizes SET size_label=%s, price_add=%s, is_available=%s, gtin=%s, stock_qty=%s WHERE id=%s",
+                            (body["size_label"], int(body.get("price_add", 0)), bool(body.get("is_available", True)), gtin_sz, stock_qty, int(body["id"])))
             else:
-                cur.execute(f"INSERT INTO {SCHEMA}.product_sizes (product_id, size_label, price_add, is_available, gtin) VALUES (%s,%s,%s,%s,%s) RETURNING id",
-                            (int(body["product_id"]), body["size_label"], int(body.get("price_add", 0)), bool(body.get("is_available", True)), gtin_sz))
+                cur.execute(f"INSERT INTO {SCHEMA}.product_sizes (product_id, size_label, price_add, is_available, gtin, stock_qty) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                            (int(body["product_id"]), body["size_label"], int(body.get("price_add", 0)), bool(body.get("is_available", True)), gtin_sz, stock_qty))
                 body["id"] = cur.fetchone()[0]
             conn.commit()
             conn.close()

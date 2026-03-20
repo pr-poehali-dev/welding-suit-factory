@@ -11,8 +11,8 @@ interface ManagerProductFormProps {
   setFormImages: React.Dispatch<React.SetStateAction<{ url: string }[]>>;
   formSizes: ProductSize[];
   setFormSizes: React.Dispatch<React.SetStateAction<ProductSize[]>>;
-  activeTab: "main" | "photos" | "sizes";
-  setActiveTab: (tab: "main" | "photos" | "sizes") => void;
+  activeTab: "main" | "photos" | "sizes" | "stock";
+  setActiveTab: (tab: "main" | "photos" | "sizes" | "stock") => void;
   uploading: boolean;
   setUploading: (v: boolean) => void;
   saving: boolean;
@@ -82,6 +82,7 @@ export default function ManagerProductForm({
             { id: "main",   label: "Основное",      icon: "FileText" },
             { id: "photos", label: "Фотографии",    icon: "Images" },
             { id: "sizes",  label: "Размерный ряд", icon: "Ruler" },
+            { id: "stock",  label: "Остатки",        icon: "Package" },
           ] as const).map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               className="flex items-center gap-1.5 px-5 py-3 text-sm"
@@ -239,6 +240,38 @@ export default function ManagerProductForm({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {activeTab === "stock" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <div style={lbl}>Остатки по размерам</div>
+                <div className="text-xs" style={{ color: "#8a9ab5" }}>
+                  Всего: <span style={{ color: "#f57c00", fontWeight: "bold" }}>{formSizes.reduce((s, sz) => s + (sz.stock_qty || 0), 0)} шт</span>
+                </div>
+              </div>
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: "1fr 100px", padding: "0 0 8px" }}>
+                <div className="text-xs uppercase tracking-wider" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Размер</div>
+                <div className="text-xs uppercase tracking-wider text-center" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Кол-во, шт</div>
+              </div>
+              <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
+                {formSizes.map((sz, idx) => (
+                  <div key={idx} className="grid items-center gap-1.5 p-2 rounded"
+                    style={{ gridTemplateColumns: "1fr 100px", background: "#0d1117", border: "1px solid rgba(255,255,255,0.05)", opacity: sz.is_available ? 1 : 0.4 }}>
+                    <div className="text-sm" style={{ color: "#e8e0d0" }}>{sz.size_label}</div>
+                    <input type="text" inputMode="numeric" className="w-full px-2 py-1.5 rounded text-sm text-center outline-none"
+                      style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)", color: sz.stock_qty > 0 ? "#4ade80" : "#e8e0d0" }}
+                      value={sz.stock_qty || ""}
+                      onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ""); updateSize(idx, "stock_qty", v === "" ? 0 : parseInt(v, 10)); }} />
+                  </div>
+                ))}
+              </div>
+              {formSizes.length === 0 && (
+                <div className="text-center py-8 text-sm" style={{ color: "#8a9ab5" }}>
+                  Сначала добавьте размеры во вкладке «Размерный ряд»
+                </div>
+              )}
             </div>
           )}
         </div>

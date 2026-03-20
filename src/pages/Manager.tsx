@@ -17,7 +17,7 @@ export default function Manager() {
   const [uploading, setUploading] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<"main"|"photos"|"sizes">("main");
+  const [activeTab, setActiveTab] = useState<"main"|"photos"|"sizes"|"stock">("main");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const [form, setForm] = useState<ManagerForm>(emptyForm());
@@ -78,7 +78,7 @@ export default function Manager() {
       badge: p.badge || "", base_price: p.base_price, image_url: p.image_url, is_active: p.is_active,
       sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock" });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
-    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "" }))) : DEFAULT_SIZES);
+    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "", stock_qty: s.stock_qty ?? 0 }))) : DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };

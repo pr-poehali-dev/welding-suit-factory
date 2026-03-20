@@ -14,7 +14,7 @@ export default function Admin() {
   const [formImages, setFormImages] = useState<{ url: string }[]>([]);
   const [formSizes, setFormSizes] = useState<ProductSize[]>(DEFAULT_SIZES);
   const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<"main" | "photos" | "sizes">("main");
+  const [activeTab, setActiveTab] = useState<"main" | "photos" | "sizes" | "stock">("main");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const notify = (msg: string, ok = true) => {
@@ -51,7 +51,7 @@ export default function Admin() {
       materials: p.materials || "", extra_info: p.extra_info || "",
     });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
-    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "" }))) : DEFAULT_SIZES);
+    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "", stock_qty: s.stock_qty ?? 0 }))) : DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };

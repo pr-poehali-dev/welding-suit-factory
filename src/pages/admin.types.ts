@@ -12,7 +12,7 @@ export const STOCK_OPTIONS = [
 export type StockStatus = typeof STOCK_OPTIONS[number]["value"];
 
 export interface ProductImage { id: number; url: string; sort_order: number; }
-export interface ProductSize  { id?: number; size_label: string; price_add: number; is_available: boolean; gtin: string; }
+export interface ProductSize  { id?: number; size_label: string; price_add: number; is_available: boolean; gtin: string; stock_qty: number; }
 
 export interface Product {
   id: number;
@@ -67,7 +67,7 @@ const PRICE_ADDS: Record<string, number> = {
   "56-58": 200, "60-62": 400, "64-66": 600, "68-70": 800, "72-74": 1000, "76-78": 1200,
 };
 export const DEFAULT_SIZES: ProductSize[] = SIZE_GROUPS.flatMap(sz =>
-  SIZE_HEIGHTS.map(ht => ({ size_label: `${sz}/${ht}`, price_add: PRICE_ADDS[sz] ?? 0, is_available: true, gtin: "" }))
+  SIZE_HEIGHTS.map(ht => ({ size_label: `${sz}/${ht}`, price_add: PRICE_ADDS[sz] ?? 0, is_available: true, gtin: "", stock_qty: 0 }))
 );
 
 export function sortSizes(sizes: ProductSize[]): ProductSize[] {
