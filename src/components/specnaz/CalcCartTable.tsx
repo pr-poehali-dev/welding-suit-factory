@@ -84,7 +84,7 @@ export default function CalcCartTable({
                   const sizes = productSizes[item.product] || [];
                   const currentSizeData = sizes.find(s => s.size_label === item.size);
                   const matches = currentSizeData ? sizeMatchesAvailability(currentSizeData, availability) : false;
-                  const csi = matches ? stockInfo(currentSizeData?.stock_qty ?? 0) : { color: "#555", label: "Недоступен" };
+                  const csi = matches ? stockInfo(currentSizeData?.stock_qty ?? 0) : { color: "#555", label: "Измените условия заказа" };
                   return (
                     <>
                       <select
@@ -95,7 +95,7 @@ export default function CalcCartTable({
                       >
                         {sizes.map((s) => {
                           const m = sizeMatchesAvailability(s, availability);
-                          const si = m ? stockInfo(s.stock_qty ?? 0) : { color: "#555", label: "Недоступен" };
+                          const si = m ? stockInfo(s.stock_qty ?? 0) : { color: "#555", label: "Измените условия заказа" };
                           return (
                             <option key={s.size_label} value={s.size_label} disabled={!m} style={{ color: si.color, background: "#0d1117" }}>
                               {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}

@@ -103,7 +103,7 @@ export default function CalcPaymentPanel({
             {(() => {
               const currentSizeData = currentProductSizes.find(s => s.size_label === addSize);
               const isAllowed = currentSizeData ? sizeMatchesAvailability(currentSizeData, availability) : false;
-              const asi = isAllowed ? stockInfo(currentSizeData?.stock_qty ?? 0) : { color: "#555", label: "Недоступен" };
+              const asi = isAllowed ? stockInfo(currentSizeData?.stock_qty ?? 0) : { color: "#555", label: "Измените условия заказа" };
               return (
                 <>
                   <select
@@ -114,7 +114,7 @@ export default function CalcPaymentPanel({
                   >
                     {currentProductSizes.map((s) => {
                       const matches = sizeMatchesAvailability(s, availability);
-                      const si = matches ? stockInfo(s.stock_qty ?? 0) : { color: "#555", label: "Недоступен" };
+                      const si = matches ? stockInfo(s.stock_qty ?? 0) : { color: "#555", label: "Измените условия заказа" };
                       return (
                         <option
                           key={s.size_label}
@@ -130,11 +130,7 @@ export default function CalcPaymentPanel({
                   <div className="flex items-center gap-1.5 mt-1">
                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: asi.color }} />
                     <span className="text-xs" style={{ color: asi.color }}>{asi.label}</span>
-                    {!isAllowed && (
-                      <span className="text-xs ml-1" style={{ color: "#f87171" }}>
-                        (выберите размер, соответствующий условию оплаты)
-                      </span>
-                    )}
+
                   </div>
                 </>
               );
