@@ -87,7 +87,7 @@ def build_contact_excel(org, contact, phone, email, message):
     return buf.getvalue()
 
 
-def build_order_excel(org, contact, phone, email, payment, with_logo, subtotal, volume_discount, total, items):
+def build_order_excel(org, contact, phone, email, payment, payment_desc, with_logo, subtotal, volume_discount, total, items):
     wb = Workbook()
     ws = wb.active
     ws.title = "Заказ"
@@ -140,7 +140,7 @@ def build_order_excel(org, contact, phone, email, payment, with_logo, subtotal, 
     cond_row += 1
 
     conditions = [
-        ("Условие оплаты", payment),
+        ("Условие оплаты", f"{payment} ({payment_desc})" if payment_desc else payment),
         ("Нанесение логотипа", "Да (+15%)" if with_logo else "Нет"),
     ]
     if volume_discount > 0:
@@ -240,13 +240,14 @@ def build_order_excel(org, contact, phone, email, payment, with_logo, subtotal, 
     return buf.getvalue()
 
 
-def send_email(subject, html, excel_bytes=None, excel_filename="Заявка.xlsx"):
+def send_email(subject, html, to=None, excel_bytes=None, excel_filename="Заявка.xlsx"):
     pwd = os.environ.get("SMTP_PASSWORD", "")
+    recipients = to if to else [TO_EMAIL]
     try:
         msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
         msg["From"]    = SMTP_USER
-        msg["To"]      = TO_EMAIL
+        msg["To"]      = ", ".join(recipients)
 
         html_part = MIMEMultipart("alternative")
         html_part.attach(MIMEText(html, "html", "utf-8"))
@@ -261,12 +262,81 @@ def send_email(subject, html, excel_bytes=None, excel_filename="Заявка.xls
 
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
             server.login(SMTP_USER, pwd)
-            server.sendmail(SMTP_USER, TO_EMAIL, msg.as_string())
-        print("SMTP: email sent OK")
+            server.sendmail(SMTP_USER, recipients, msg.as_string())
+        print(f"SMTP: email sent OK to {recipients}")
         return True
     except Exception as e:
         print(f"SMTP error: {e}")
         return False
+
+
+def build_client_html(contact, payment, payment_desc, with_logo, volume_discount, total, items):
+    """HTML-письмо клиенту с уважительным обращением и контактами."""
+    name = contact if contact and contact != "—" else "Уважаемый клиент"
+
+    logo_label = "Да (+15%)" if with_logo else "Нет"
+    discount_pct = round(volume_discount * 100) if volume_discount else 0
+    pay_info = f"{payment} ({payment_desc})" if payment_desc else payment
+
+    rows = ""
+    for item in items:
+        rows += f"""
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #eee;color:#222">{item.get('product','')}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;color:#666;text-align:center">{item.get('size','')}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">{item.get('qty','')}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">{item.get('unitPrice',0):,} ₽</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:bold">{item.get('lineTotal',0):,} ₽</td>
+      </tr>"""
+
+    return f"""
+<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
+  <div style="background:#f57c00;padding:16px 24px">
+    <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА</h1>
+  </div>
+  <div style="background:#f9f9f9;padding:24px;border:1px solid #eee">
+    <p style="color:#222;font-size:15px;margin:0 0 16px">
+      {name}, благодарим Вас за обращение!<br>
+      Ваша заявка принята и находится в обработке. Наш менеджер свяжется с Вами в ближайшее время для уточнения деталей и подтверждения заказа.
+    </p>
+    <div style="background:#fff3e0;padding:12px 16px;border-radius:4px;margin-bottom:16px;border:1px solid #ffe0b2">
+      <div style="font-size:12px;font-weight:bold;color:#e65100;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Условия формирования цены</div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="padding:3px 0;color:#666;font-size:13px;width:180px">Условие оплаты</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{pay_info}</td></tr>
+        <tr><td style="padding:3px 0;color:#666;font-size:13px">Нанесение логотипа</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{logo_label}</td></tr>
+        {"<tr><td style='padding:3px 0;color:#666;font-size:13px'>Скидка за объём</td><td style='padding:3px 0;color:#4CAF50;font-size:13px;font-weight:bold'>" + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
+      </table>
+    </div>
+    <h3 style="color:#333;border-bottom:2px solid #f57c00;padding-bottom:8px;margin-bottom:0">Ваш заказ</h3>
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="background:#f57c00">
+          <th style="padding:8px;color:#fff;text-align:left">Артикул</th>
+          <th style="padding:8px;color:#fff;text-align:center">Размер</th>
+          <th style="padding:8px;color:#fff;text-align:center">Кол-во</th>
+          <th style="padding:8px;color:#fff;text-align:right">Цена/шт</th>
+          <th style="padding:8px;color:#fff;text-align:right">Сумма</th>
+        </tr>
+      </thead>
+      <tbody>{rows}</tbody>
+    </table>
+    <div style="text-align:right;margin-top:12px;padding:12px;background:#fff3e0;border-radius:4px">
+      <span style="color:#666;font-size:14px">ИТОГО: </span>
+      <span style="color:#f57c00;font-size:22px;font-weight:bold">{total:,} ₽</span>
+    </div>
+    <p style="color:#222;font-size:14px;margin:20px 0 0;line-height:1.6">
+      Если у Вас возникнут вопросы, мы всегда на связи:
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin-top:8px">
+      <tr><td style="padding:4px 0;color:#666;font-size:13px;width:80px">Телефон:</td><td style="padding:4px 0;color:#f57c00;font-size:13px;font-weight:bold"><a href="tel:+79308852555" style="color:#f57c00;text-decoration:none">8-930-885-25-55</a></td></tr>
+      <tr><td style="padding:4px 0;color:#666;font-size:13px">E-mail:</td><td style="padding:4px 0;font-size:13px"><a href="mailto:s9308852555@yandex.ru" style="color:#f57c00;text-decoration:none">s9308852555@yandex.ru</a></td></tr>
+      <tr><td style="padding:4px 0;color:#666;font-size:13px">Сайт:</td><td style="padding:4px 0;font-size:13px"><a href="https://спецназфабрика.рф" style="color:#f57c00;text-decoration:none">спецназфабрика.рф</a></td></tr>
+    </table>
+  </div>
+  <div style="background:#eee;padding:12px 24px;font-size:12px;color:#999">
+    С уважением, команда СПЕЦНАЗ ФАБРИКА · <a href="https://спецназфабрика.рф" style="color:#f57c00">спецназфабрика.рф</a>
+  </div>
+</div>"""
 
 
 def save_lead(org, contact, phone, email, message, kind, order_json, order_total):
@@ -332,10 +402,37 @@ def handler(event: dict, context) -> dict:
     Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
   </div>
 </div>"""
-        send_email("Новая заявка на КП — спецназфабрика.рф", html, excel, f"Заявка_КП_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx")
+        fname = f"Заявка_КП_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx"
+        send_email("Новая заявка на КП — спецназфабрика.рф", html, excel_bytes=excel, excel_filename=fname)
+
+        if email and "@" in email:
+            name = contact if contact and contact != "—" else "Уважаемый клиент"
+            client_html = f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <div style="background:#f57c00;padding:16px 24px">
+    <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА</h1>
+  </div>
+  <div style="background:#f9f9f9;padding:24px;border:1px solid #eee">
+    <p style="color:#222;font-size:15px;margin:0 0 16px">
+      {name}, благодарим Вас за обращение!<br>
+      Ваша заявка на коммерческое предложение принята. Наш менеджер свяжется с Вами в течение 2 часов.
+    </p>
+    <p style="color:#222;font-size:14px;margin:16px 0 0;line-height:1.6">Если у Вас возникнут вопросы, мы всегда на связи:</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:8px">
+      <tr><td style="padding:4px 0;color:#666;font-size:13px;width:80px">Телефон:</td><td style="padding:4px 0;font-size:13px"><a href="tel:+79308852555" style="color:#f57c00;text-decoration:none;font-weight:bold">8-930-885-25-55</a></td></tr>
+      <tr><td style="padding:4px 0;color:#666;font-size:13px">E-mail:</td><td style="padding:4px 0;font-size:13px"><a href="mailto:s9308852555@yandex.ru" style="color:#f57c00;text-decoration:none">s9308852555@yandex.ru</a></td></tr>
+      <tr><td style="padding:4px 0;color:#666;font-size:13px">Сайт:</td><td style="padding:4px 0;font-size:13px"><a href="https://спецназфабрика.рф" style="color:#f57c00;text-decoration:none">спецназфабрика.рф</a></td></tr>
+    </table>
+  </div>
+  <div style="background:#eee;padding:12px 24px;font-size:12px;color:#999">
+    С уважением, команда СПЕЦНАЗ ФАБРИКА · <a href="https://спецназфабрика.рф" style="color:#f57c00">спецназфабрика.рф</a>
+  </div>
+</div>"""
+            send_email("Ваша заявка принята — СПЕЦНАЗ ФАБРИКА", client_html, to=[email])
 
     elif kind == "order":
         payment         = body.get("payment", "—")
+        payment_desc    = body.get("paymentDesc", "")
         with_logo       = body.get("withLogo", False)
         subtotal        = body.get("subtotal", 0)
         volume_discount = body.get("volumeDiscount", 0)
@@ -343,9 +440,10 @@ def handler(event: dict, context) -> dict:
         items           = body.get("items", [])
         save_lead(org, contact, phone, email, "", "order", json.dumps(items, ensure_ascii=False), total)
 
-        excel = build_order_excel(org, contact, phone, email, payment, with_logo, subtotal, volume_discount, total, items)
+        excel = build_order_excel(org, contact, phone, email, payment, payment_desc, with_logo, subtotal, volume_discount, total, items)
 
         logo_label = "Да (+15%)" if with_logo else "Нет"
+        pay_info = f"{payment} ({payment_desc})" if payment_desc else payment
         discount_pct = round(volume_discount * 100) if volume_discount else 0
 
         total_saving = sum(item.get('saving', 0) for item in items)
@@ -399,7 +497,7 @@ def handler(event: dict, context) -> dict:
     <div style="background:#fff3e0;padding:12px 16px;border-radius:4px;margin-bottom:16px;border:1px solid #ffe0b2">
       <div style="font-size:12px;font-weight:bold;color:#e65100;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Условия формирования цены</div>
       <table style="width:100%;border-collapse:collapse">
-        <tr><td style="padding:3px 0;color:#666;font-size:13px;width:180px">Условие оплаты</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{payment}</td></tr>
+        <tr><td style="padding:3px 0;color:#666;font-size:13px;width:180px">Условие оплаты</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{pay_info}</td></tr>
         <tr><td style="padding:3px 0;color:#666;font-size:13px">Нанесение логотипа</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{logo_label}</td></tr>
         {"<tr><td style='padding:3px 0;color:#666;font-size:13px'>Скидка за объём</td><td style='padding:3px 0;color:#4CAF50;font-size:13px;font-weight:bold'>" + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
       </table>
@@ -426,7 +524,12 @@ def handler(event: dict, context) -> dict:
     Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
   </div>
 </div>"""
-        send_email(f"Заказ из калькулятора на {total:,} ₽ — спецназфабрика.рф", html, excel, f"Заказ_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx")
+        fname = f"Заказ_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx"
+        send_email(f"Заказ из калькулятора на {total:,} ₽ — спецназфабрика.рф", html, excel_bytes=excel, excel_filename=fname)
+
+        if email and "@" in email:
+            client_html = build_client_html(contact, payment, payment_desc, with_logo, volume_discount, total, items)
+            send_email(f"Ваш заказ на {total:,} ₽ — СПЕЦНАЗ ФАБРИКА", client_html, to=[email], excel_bytes=excel, excel_filename=fname)
 
     else:
         return {"statusCode": 400, "headers": {**cors(), "Content-Type": "application/json"}, "body": json.dumps({"error": "unknown kind"})}

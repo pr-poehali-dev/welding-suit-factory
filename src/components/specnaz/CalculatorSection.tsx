@@ -103,7 +103,7 @@ export default function CalculatorSection({
     if (!mPhone.trim()) { setMError("Укажите телефон"); return; }
     setSending(true);
     setMError("");
-    const payLabel = PAYMENT_OPTIONS.find(p => p.id === payment)?.label ?? payment;
+    const payOpt = PAYMENT_OPTIONS.find(p => p.id === payment) ?? PAYMENT_OPTIONS[0];
     try {
       await fetch(SEND_API, {
         method: "POST",
@@ -114,7 +114,8 @@ export default function CalculatorSection({
           contact: mContact,
           phone: mPhone,
           email: mEmail,
-          payment: payLabel,
+          payment: payOpt.label,
+          paymentDesc: payOpt.desc,
           withLogo,
           subtotal,
           volumeDiscount,
