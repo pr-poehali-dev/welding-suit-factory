@@ -67,16 +67,28 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     }
   }, [addProduct, productSizes, payment]);
 
+  const getStockQty = (product: string, size: string) => {
+    return (productSizes[product] || []).find(s => s.size_label === size)?.stock_qty ?? 0;
+  };
+
+  const clampQty = (product: string, size: string, qty: number) => {
+    const stock = getStockQty(product, size);
+    if (stock > 0 && qty > stock) return stock;
+    return qty;
+  };
+
   const addToCart = () => {
     if (!addProduct) return;
     setCart((prev) => {
       const existing = prev.find((item) => item.product === addProduct && item.size === addSize);
       if (existing) {
+        const newQty = clampQty(addProduct, addSize, existing.qty + addQty);
         return prev.map((item) =>
-          item.id === existing.id ? { ...item, qty: item.qty + addQty } : item
+          item.id === existing.id ? { ...item, qty: newQty } : item
         );
       }
-      return [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty: addQty }];
+      const qty = clampQty(addProduct, addSize, addQty);
+      return [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty }];
     });
   };
 
@@ -86,7 +98,10 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
 
   const updateQty = (id: string, qty: number) => {
     if (qty < 1) return;
-    setCart((prev) => prev.map((item) => item.id === id ? { ...item, qty } : item));
+    setCart((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      return { ...item, qty: clampQty(item.product, item.size, qty) };
+    }));
   };
 
   const updateSize = (id: string, size: string) => {
