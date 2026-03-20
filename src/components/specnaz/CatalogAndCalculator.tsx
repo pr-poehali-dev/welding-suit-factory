@@ -23,8 +23,8 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     fetch(`${API}?action=payment_options`)
       .then(r => r.json())
       .then(data => {
-        const opts = (data.payment_options || []).map((o: { option_id: string; group_id: string; availability: string; label: string; desc: string; coeff: number }) => ({
-          id: o.option_id, group: o.group_id, availability: o.availability, label: o.label, desc: o.desc, coeff: o.coeff,
+        const opts = (data.payment_options || []).map((o: { option_id: string; group_id: string; availability: string; label: string; description: string; coeff: number }) => ({
+          id: o.option_id, group: o.group_id, availability: o.availability, label: o.label, desc: o.description, coeff: o.coeff,
         })) as PaymentOption[];
         if (opts.length > 0) setDbPaymentOptions(opts);
       });
