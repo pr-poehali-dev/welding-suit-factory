@@ -377,7 +377,7 @@ export default function ManagerProductForm({
                   ))}
                 </div>
                 <div className="mt-3 text-xs" style={{ color: "#8a9ab5" }}>
-                  Город отправления: <strong style={{ color: "#e8e0d0" }}>Иваново</strong>
+                  Город отправления: <strong style={{ color: "#e8e0d0" }}>Москва / Рязань</strong>
                 </div>
               </div>
             </div>

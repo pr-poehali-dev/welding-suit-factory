@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Icon from "@/components/ui/icon";
 import { PAYMENT_OPTIONS, PAYMENT_GROUPS, VOLUME_DISCOUNTS, type PaymentOption } from "./constants";
 import CalcPaymentPanel from "./CalcPaymentPanel";
@@ -120,6 +120,7 @@ export default function CalculatorSection({
   const availability = payOpt.availability;
   const currentProductSizes = productSizes[addProduct] || [];
 
+  const [shipCity, setShipCity] = useState<"Москва" | "Рязань">("Москва");
   const [showModal, setShowModal] = useState(false);
   const [mOrg, setMOrg] = useState("");
   const [mContact, setMContact] = useState("");
@@ -401,8 +402,20 @@ export default function CalculatorSection({
                   </div>
                 </div>
 
-                <div className="text-xs mb-3" style={{ color: "#8a9ab5" }}>
-                  Город отправления: <strong style={{ color: "#e8e0d0" }}>Иваново</strong>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs" style={{ color: "#8a9ab5" }}>Город отправления:</span>
+                  {(["Москва", "Рязань"] as const).map(c => (
+                    <button key={c} onClick={() => setShipCity(c)}
+                      className="px-2.5 py-1 text-xs rounded font-medium"
+                      style={{
+                        background: shipCity === c ? "rgba(245,124,0,0.15)" : "rgba(255,255,255,0.04)",
+                        border: `1px solid ${shipCity === c ? "rgba(245,124,0,0.5)" : "rgba(255,255,255,0.1)"}`,
+                        color: shipCity === c ? "#f57c00" : "#8a9ab5",
+                        cursor: "pointer",
+                      }}>
+                      {c}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">

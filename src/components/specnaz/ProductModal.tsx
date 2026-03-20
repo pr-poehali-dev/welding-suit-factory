@@ -5,6 +5,7 @@ import { ApiProduct, accent, muted, oswald, FALLBACK_IMG } from "./catalogTypes"
 import StockBadge from "./StockBadge";
 
 type DetailTab = "description" | "specs" | "docs" | "materials" | "delivery";
+type ShipCity = "Москва" | "Рязань";
 
 const SHIPPING_CALCS = [
   { name: "СДЭК", url: "https://www.cdek.ru/ru/calculate", color: "#00B33C" },
@@ -27,6 +28,7 @@ interface ProductModalProps {
 export default function ProductModal({ product, onClose, onAddToCalc, selectedSize, setSelectedSize }: ProductModalProps) {
   const [tab, setTab] = useState<DetailTab>("description");
   const [imgIdx, setImgIdx] = useState(0);
+  const [shipCity, setShipCity] = useState<ShipCity>("Москва");
 
   const availSizes = product.sizes?.filter(s => s.is_available) ?? [];
   const currentSizeObj = availSizes.find(s => s.size_label === selectedSize) ?? availSizes[0];
@@ -269,7 +271,21 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
                         <div className="text-xs mb-1" style={{ color: muted, fontFamily: oswald, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                           Рассчитать стоимость доставки
                         </div>
-                        <div className="text-xs mb-3" style={{ color: muted }}>Город отправления: <strong style={{ color: "#e8e0d0" }}>Иваново</strong></div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-xs" style={{ color: muted }}>Город отправления:</span>
+                          {(["Москва", "Рязань"] as const).map(c => (
+                            <button key={c} onClick={() => setShipCity(c)}
+                              className="px-2 py-0.5 text-xs rounded font-medium"
+                              style={{
+                                background: shipCity === c ? "rgba(245,124,0,0.15)" : "rgba(255,255,255,0.04)",
+                                border: `1px solid ${shipCity === c ? "rgba(245,124,0,0.5)" : "rgba(255,255,255,0.1)"}`,
+                                color: shipCity === c ? accent : muted,
+                                cursor: "pointer",
+                              }}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                           {SHIPPING_CALCS.map(tk => (
                             <a key={tk.name} href={tk.url} target="_blank" rel="noopener noreferrer"
