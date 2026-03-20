@@ -190,6 +190,16 @@ export default function CalculatorSection({
           />
 
           <div className="lg:col-span-2 flex flex-col gap-5">
+            <CalcCartTable
+              cartRows={cartRows}
+              volumeDiscount={volumeDiscount}
+              productSizes={productSizes}
+              updateSize={updateSize}
+              updateQty={updateQty}
+              removeFromCart={removeFromCart}
+              availability={availability}
+            />
+
             {stockWarning && (
               <div className="flex items-center gap-3 px-4 py-3 rounded" style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.3)" }}>
                 <Icon name="AlertTriangle" size={18} style={{ color: "#facc15", flexShrink: 0 }} />
@@ -203,15 +213,6 @@ export default function CalculatorSection({
                 </button>
               </div>
             )}
-            <CalcCartTable
-              cartRows={cartRows}
-              volumeDiscount={volumeDiscount}
-              productSizes={productSizes}
-              updateSize={updateSize}
-              updateQty={updateQty}
-              removeFromCart={removeFromCart}
-              availability={availability}
-            />
 
             <div className="rounded p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
               <div className="text-xs uppercase tracking-widest mb-4" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Итог заказа</div>
