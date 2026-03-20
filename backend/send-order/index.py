@@ -260,70 +260,80 @@ def send_email(subject, html, to=None, excel_bytes=None, excel_filename="Зая�
         return False
 
 
-def build_client_html(contact, payment, payment_desc, with_logo, volume_discount, total, items):
-    """HTML-письмо клиенту с уважительным обращением и контактами."""
+def build_client_html(contact, with_logo, subtotal, volume_discount, total, groups):
+    """HTML-письмо клиенту — табличный формат как Excel."""
     name = contact if contact and contact != "—" else "Уважаемый клиент"
-
     logo_label = "Да (+15%)" if with_logo else "Нет"
     discount_pct = round(volume_discount * 100) if volume_discount else 0
-    pay_info = f"{payment} ({payment_desc})" if payment_desc else payment
+    td = 'style="padding:5px 8px;border:1px solid #ddd;font-size:12px'
 
-    rows = ""
-    for item in items:
-        rows += f"""
+    groups_html = ""
+    for g in groups:
+        g_payment = g.get("payment", "")
+        g_desc = g.get("paymentDesc", "")
+        g_total = g.get("total", 0)
+        g_items = g.get("items", [])
+        pay_label = f"{g_payment} ({g_desc})" if g_desc else g_payment
+
+        rows = ""
+        for item in g_items:
+            rows += f"""
       <tr>
-        <td style="padding:8px;border-bottom:1px solid #eee;color:#222">{item.get('product','')}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;color:#666;text-align:center">{item.get('size','')}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">{item.get('qty','')}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">{item.get('unitPrice',0):,} ₽</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:bold">{item.get('lineTotal',0):,} ₽</td>
+        <td {td}">{item.get('product','')}</td>
+        <td {td};text-align:center">{item.get('size','')}</td>
+        <td {td};text-align:center">{item.get('qty','')}</td>
+        <td {td};text-align:right;font-weight:bold">{item.get('unitPrice',0):,}</td>
+        <td {td};text-align:right;font-weight:bold">{item.get('lineTotal',0):,}</td>
       </tr>"""
 
+        groups_html += f"""
+    <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
+      <tr><td colspan="5" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
+      <tr style="background:#f57c00">
+        <th {td};color:#fff">Артикул</th>
+        <th {td};color:#fff;text-align:center">Размер</th>
+        <th {td};color:#fff;text-align:center">Кол-во</th>
+        <th {td};color:#fff;text-align:right">Цена/шт</th>
+        <th {td};color:#fff;text-align:right">Сумма</th>
+      </tr>
+      {rows}
+      <tr style="background:#f5f5f5">
+        <td colspan="4" {td};text-align:right;color:#666">Подитог:</td>
+        <td {td};text-align:right;font-weight:bold;color:#f57c00;font-size:13px">{g_total:,} ₽</td>
+      </tr>
+    </table>"""
+
+    footer_rows = ""
+    if subtotal != total and discount_pct > 0:
+        footer_rows += f"""
+      <tr><td colspan="4" {td};text-align:right;color:#666;border:none">Сумма без скидки:</td><td {td};text-align:right;color:#666;border:none">{subtotal:,} ₽</td></tr>
+      <tr><td colspan="4" {td};text-align:right;color:#4CAF50;border:none">Скидка за объём ({discount_pct}%):</td><td {td};text-align:right;color:#4CAF50;border:none">−{subtotal - total:,} ₽</td></tr>"""
+
     return f"""
-<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
-  <div style="background:#f57c00;padding:16px 24px">
-    <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА</h1>
-  </div>
-  <div style="background:#f9f9f9;padding:24px;border:1px solid #eee">
-    <p style="color:#222;font-size:15px;margin:0 0 16px">
+<div style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto">
+  <table style="width:100%;border-collapse:collapse">
+    <tr><td colspan="5" style="background:#f57c00;padding:12px 16px">
+      <span style="color:#fff;font-size:18px;font-weight:bold;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА</span>
+    </td></tr>
+    <tr><td colspan="5" style="padding:12px 8px;font-size:14px;color:#222">
       {name}, благодарим Вас за обращение!<br>
-      Ваша заявка принята и находится в обработке. Наш менеджер свяжется с Вами в ближайшее время для уточнения деталей и подтверждения заказа.
-    </p>
-    <div style="background:#fff3e0;padding:12px 16px;border-radius:4px;margin-bottom:16px;border:1px solid #ffe0b2">
-      <div style="font-size:12px;font-weight:bold;color:#e65100;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Условия формирования цены</div>
-      <table style="width:100%;border-collapse:collapse">
-        <tr><td style="padding:3px 0;color:#666;font-size:13px;width:180px">Условие оплаты</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{pay_info}</td></tr>
-        <tr><td style="padding:3px 0;color:#666;font-size:13px">Нанесение логотипа</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{logo_label}</td></tr>
-        {"<tr><td style='padding:3px 0;color:#666;font-size:13px'>Скидка за объём</td><td style='padding:3px 0;color:#4CAF50;font-size:13px;font-weight:bold'>" + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
-      </table>
-    </div>
-    <h3 style="color:#333;border-bottom:2px solid #f57c00;padding-bottom:8px;margin-bottom:0">Ваш заказ</h3>
-    <table style="width:100%;border-collapse:collapse">
-      <thead>
-        <tr style="background:#f57c00">
-          <th style="padding:8px;color:#fff;text-align:left">Артикул</th>
-          <th style="padding:8px;color:#fff;text-align:center">Размер</th>
-          <th style="padding:8px;color:#fff;text-align:center">Кол-во</th>
-          <th style="padding:8px;color:#fff;text-align:right">Цена/шт</th>
-          <th style="padding:8px;color:#fff;text-align:right">Сумма</th>
-        </tr>
-      </thead>
-      <tbody>{rows}</tbody>
-    </table>
-    <div style="text-align:right;margin-top:12px;padding:12px;background:#fff3e0;border-radius:4px">
-      <span style="color:#666;font-size:14px">ИТОГО: </span>
-      <span style="color:#f57c00;font-size:22px;font-weight:bold">{total:,} ₽</span>
-    </div>
-    <p style="color:#222;font-size:14px;margin:20px 0 0;line-height:1.6">
-      Если у Вас возникнут вопросы, мы всегда на связи:
-    </p>
-    <table style="width:100%;border-collapse:collapse;margin-top:8px">
-      <tr><td style="padding:4px 0;color:#666;font-size:13px;width:80px">Телефон:</td><td style="padding:4px 0;color:#f57c00;font-size:13px;font-weight:bold"><a href="tel:+79308852555" style="color:#f57c00;text-decoration:none">8-930-885-25-55</a></td></tr>
-      <tr><td style="padding:4px 0;color:#666;font-size:13px">E-mail:</td><td style="padding:4px 0;font-size:13px"><a href="mailto:s9308852555@yandex.ru" style="color:#f57c00;text-decoration:none">s9308852555@yandex.ru</a></td></tr>
-      <tr><td style="padding:4px 0;color:#666;font-size:13px">Сайт:</td><td style="padding:4px 0;font-size:13px"><a href="https://спецназфабрика.рф" style="color:#f57c00;text-decoration:none">спецназфабрика.рф</a></td></tr>
-    </table>
-  </div>
-  <div style="background:#eee;padding:12px 24px;font-size:12px;color:#999">
+      Ваша заявка принята. Менеджер свяжется с Вами в ближайшее время.
+    </td></tr>
+    <tr><td {td};color:#666;width:160px">Нанесение логотипа</td><td colspan="4" {td}">{logo_label}</td></tr>
+    {"<tr><td " + td + ";color:#666" + '">Скидка за объём</td><td colspan="4" ' + td + ";color:#4CAF50;font-weight:bold" + '">' + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
+  </table>
+  <div style="height:12px"></div>
+  {groups_html}
+  <table style="width:100%;border-collapse:collapse">
+    {footer_rows}
+    <tr style="background:#fff3e0"><td colspan="4" {td};text-align:right;font-weight:bold;font-size:14px;border:2px solid #f57c00">ИТОГО:</td><td {td};text-align:right;font-weight:bold;font-size:16px;color:#f57c00;border:2px solid #f57c00">{total:,} ₽</td></tr>
+  </table>
+  <table style="width:100%;border-collapse:collapse;margin-top:16px">
+    <tr><td {td};color:#666;border:none;width:80px">Телефон:</td><td {td};border:none"><a href="tel:+79308852555" style="color:#f57c00;text-decoration:none;font-weight:bold">8-930-885-25-55</a></td></tr>
+    <tr><td {td};color:#666;border:none">E-mail:</td><td {td};border:none"><a href="mailto:s9308852555@yandex.ru" style="color:#f57c00;text-decoration:none">s9308852555@yandex.ru</a></td></tr>
+    <tr><td {td};color:#666;border:none">Сайт:</td><td {td};border:none"><a href="https://спецназфабрика.рф" style="color:#f57c00;text-decoration:none">спецназфабрика.рф</a></td></tr>
+  </table>
+  <div style="background:#eee;padding:8px 16px;font-size:11px;color:#999;margin-top:8px">
     С уважением, команда СПЕЦНАЗ ФАБРИКА · <a href="https://спецназфабрика.рф" style="color:#f57c00">спецназфабрика.рф</a>
   </div>
 </div>"""
@@ -496,12 +506,7 @@ def handler(event: dict, context) -> dict:
         send_email(f"Заказ на {total:,} ₽ — спецназфабрика.рф", html, excel_bytes=excel, excel_filename=fname)
 
         if email and "@" in email:
-            all_items_flat = []
-            for g in groups:
-                all_items_flat.extend(g.get("items", []))
-            first_pay = groups[0].get("payment", "") if groups else ""
-            first_desc = groups[0].get("paymentDesc", "") if groups else ""
-            client_html = build_client_html(contact, first_pay, first_desc, with_logo, volume_discount, total, all_items_flat)
+            client_html = build_client_html(contact, with_logo, subtotal, volume_discount, total, groups)
             send_email(f"Ваш заказ на {total:,} ₽ — СПЕЦНАЗ ФАБРИКА", client_html, to=[email], excel_bytes=excel, excel_filename=fname)
 
     else:
