@@ -3,7 +3,7 @@ import { ApiProduct, accent, muted, oswald, FALLBACK_IMG, CHESTNIY_ZNAK_IMG } fr
 
 function stockInfo(qty: number) {
   if (qty === 0) return { color: "#f87171", label: "Под заказ" };
-  if (qty < 20)  return { color: "#facc15", label: "Мало" };
+  if (qty < 20)  return { color: "#facc15", label: `Мало (${qty} шт)` };
   if (qty <= 100) return { color: "#4ade80", label: "В наличии" };
   return { color: "#60a5fa", label: "Много" };
 }

@@ -19,6 +19,12 @@ interface CalcCartTableProps {
   updateSize: (id: string, size: string) => void;
   updateQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
+  availability: "stock" | "order";
+}
+
+function sizeMatchesAvailability(s: ProductSizeData, availability: "stock" | "order"): boolean {
+  const qty = s.stock_qty ?? 0;
+  return availability === "stock" ? qty > 0 : qty === 0;
 }
 
 export default function CalcCartTable({
@@ -28,6 +34,7 @@ export default function CalcCartTable({
   updateSize,
   updateQty,
   removeFromCart,
+  availability,
 }: CalcCartTableProps) {
   return (
     <div className="rounded overflow-hidden" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
@@ -48,7 +55,6 @@ export default function CalcCartTable({
         </div>
       ) : (
         <div>
-          {/* Заголовок таблицы */}
           <div className="hidden md:grid grid-cols-12 px-5 py-2 text-xs uppercase tracking-wider" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
             <div className="col-span-4">Артикул</div>
             <div className="col-span-3">Размер</div>
@@ -63,7 +69,6 @@ export default function CalcCartTable({
               className="px-5 py-3 grid grid-cols-12 gap-2 items-center"
               style={{ borderBottom: idx < cartRows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}
             >
-              {/* Артикул */}
               <div className="col-span-12 md:col-span-4">
                 <div className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{item.product}</div>
                 <div className="text-xs mt-0.5 flex items-center gap-2">
@@ -74,34 +79,39 @@ export default function CalcCartTable({
                 </div>
               </div>
 
-              {/* Размер */}
               <div className="col-span-6 md:col-span-3">
-                {(() => { const csi = stockInfo((productSizes[item.product] || []).find(s => s.size_label === item.size)?.stock_qty ?? 0); return (
-                  <>
-                    <select
-                      value={item.size}
-                      onChange={(e) => updateSize(item.id, e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs rounded"
-                      style={{ background: "#0d1117", border: `1px solid ${csi.color}40`, color: csi.color, outline: "none" }}
-                    >
-                      {(productSizes[item.product] || []).map((s) => {
-                        const si = stockInfo(s.stock_qty ?? 0);
-                        return (
-                          <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#0d1117" }}>
-                            {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: csi.color }} />
-                      <span style={{ color: csi.color, fontSize: 10 }}>{csi.label}</span>
-                    </div>
-                  </>
-                ); })()}
+                {(() => {
+                  const sizes = productSizes[item.product] || [];
+                  const currentSizeData = sizes.find(s => s.size_label === item.size);
+                  const matches = currentSizeData ? sizeMatchesAvailability(currentSizeData, availability) : false;
+                  const csi = matches ? stockInfo(currentSizeData?.stock_qty ?? 0) : { color: "#555", label: "Недоступен" };
+                  return (
+                    <>
+                      <select
+                        value={item.size}
+                        onChange={(e) => updateSize(item.id, e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs rounded"
+                        style={{ background: "#0d1117", border: `1px solid ${csi.color}40`, color: csi.color, outline: "none" }}
+                      >
+                        {sizes.map((s) => {
+                          const m = sizeMatchesAvailability(s, availability);
+                          const si = m ? stockInfo(s.stock_qty ?? 0) : { color: "#555", label: "Недоступен" };
+                          return (
+                            <option key={s.size_label} value={s.size_label} disabled={!m} style={{ color: si.color, background: "#0d1117" }}>
+                              {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: csi.color }} />
+                        <span style={{ color: csi.color, fontSize: 10 }}>{csi.label}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
-              {/* Количество */}
               <div className="col-span-3 md:col-span-2 flex items-center justify-center gap-1">
                 <button
                   onClick={() => updateQty(item.id, item.qty - 1)}
@@ -116,7 +126,6 @@ export default function CalcCartTable({
                 >+</button>
               </div>
 
-              {/* Сумма */}
               <div className="col-span-2 md:col-span-2 text-right">
                 <div className="text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
                   {item.finalLine.toLocaleString("ru-RU")} ₽
@@ -126,7 +135,6 @@ export default function CalcCartTable({
                 )}
               </div>
 
-              {/* Удалить */}
               <div className="col-span-1 flex justify-end">
                 <button
                   onClick={() => removeFromCart(item.id)}

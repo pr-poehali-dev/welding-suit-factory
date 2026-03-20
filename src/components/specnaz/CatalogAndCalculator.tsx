@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { CatalogPath } from "./CatalogTree";
 import HeroSection from "./HeroSection";
 import CatalogSection from "./CatalogSection";
-import CalculatorSection, { CartItem, ProductSizeData } from "./CalculatorSection";
+import CalculatorSection, { CartItem, ProductSizeData, getPaymentAvailability } from "./CalculatorSection";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
@@ -41,7 +41,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
       });
   }, []);
 
-  const [payment, setPayment] = useState("prepay_100");
+  const [payment, setPayment] = useState("stock_prepay_100");
   const [withLogo, setWithLogo] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -57,11 +57,15 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   }, [productNames, addProduct]);
 
   useEffect(() => {
-    const sizes = productSizes[addProduct] || [];
+    const avail = getPaymentAvailability(payment);
+    const sizes = (productSizes[addProduct] || []).filter(s => {
+      const q = s.stock_qty ?? 0;
+      return avail === "stock" ? q > 0 : q === 0;
+    });
     if (sizes.length > 0 && !sizes.some(s => s.size_label === addSize)) {
       setAddSize(sizes[0].size_label);
     }
-  }, [addProduct, productSizes]);
+  }, [addProduct, productSizes, payment]);
 
   const addToCart = () => {
     if (!addProduct) return;
