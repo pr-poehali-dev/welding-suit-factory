@@ -3,6 +3,8 @@ import { CatalogPath } from "./CatalogTree";
 import HeroSection from "./HeroSection";
 import CatalogSection from "./CatalogSection";
 import CalculatorSection, { CartItem, ProductSizeData, getPaymentAvailability } from "./CalculatorSection";
+import type { ProductDimensions } from "./catalogTypes";
+import type { PaymentOption } from "./constants";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
@@ -17,6 +19,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
   const [basePrices, setBasePrices] = useState<Record<string, number>>({});
   const [productNames, setProductNames] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<Record<string, ProductSizeData[]>>({});
+  const [productDimensions, setProductDimensions] = useState<Record<string, ProductDimensions>>({});
   const [dbPaymentOptions, setDbPaymentOptions] = useState<PaymentOption[] | null>(null);
 
   useEffect(() => {
@@ -35,7 +38,8 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         const prices: Record<string, number> = {};
         const names: string[] = [];
         const sizes: Record<string, ProductSizeData[]> = {};
-        active.forEach((p: { name: string; base_price: number; sizes?: ProductSizeData[] }) => {
+        const dims: Record<string, ProductDimensions> = {};
+        active.forEach((p: { name: string; base_price: number; sizes?: ProductSizeData[]; pack_length?: number; pack_width?: number; pack_height?: number; unit_weight?: number }) => {
           prices[p.name] = p.base_price;
           if (!names.includes(p.name)) names.push(p.name);
           sizes[p.name] = (p.sizes || []).filter(s => s.is_available).sort((a, b) => {
@@ -43,10 +47,17 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
             const [aS, aH] = pa(a), [bS, bH] = pa(b);
             return aS - bS || aH - bH;
           });
+          dims[p.name] = {
+            pack_length: p.pack_length ?? 0,
+            pack_width: p.pack_width ?? 0,
+            pack_height: p.pack_height ?? 0,
+            unit_weight: p.unit_weight ?? 0,
+          };
         });
         setBasePrices(prices);
         setProductNames(names);
         setProductSizes(sizes);
+        setProductDimensions(dims);
       });
   }, []);
 
@@ -171,6 +182,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         basePrices={basePrices}
         productNames={productNames}
         productSizes={productSizes}
+        productDimensions={productDimensions}
         paymentOptionsOverride={dbPaymentOptions}
         stockWarning={stockWarning}
         dismissWarning={() => setStockWarning("")}

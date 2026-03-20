@@ -5,6 +5,7 @@ export const PRODUCT_IMAGE = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7
 export const NAV_LINKS = [
   { label: "О фабрике", href: "#about" },
   { label: "Каталог", href: "#catalog" },
+  { label: "Калькулятор", href: "#calculator" },
   { label: "Услуги пошива", href: "#sewing" },
   { label: "Производство", href: "#production" },
   { label: "Сертификаты", href: "#certificates" },

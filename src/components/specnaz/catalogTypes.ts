@@ -34,6 +34,13 @@ export interface ApiProduct {
   barcode_url: string;
 }
 
+export interface ProductDimensions {
+  pack_length: number;
+  pack_width: number;
+  pack_height: number;
+  unit_weight: number;
+}
+
 export const accent = "#f57c00";
 export const muted = "#8a9ab5";
 export const oswald = "'Oswald', sans-serif";

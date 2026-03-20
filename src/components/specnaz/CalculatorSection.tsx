@@ -5,8 +5,19 @@ import CalcPaymentPanel from "./CalcPaymentPanel";
 import CalcAddItem from "./CalcAddItem";
 import CalcCartTable from "./CalcCartTable";
 import CalcOrderModal from "./CalcOrderModal";
+import type { ProductDimensions } from "./catalogTypes";
 
 const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
+
+const SHIPPING_CALCS = [
+  { name: "СДЭК", url: "https://www.cdek.ru/ru/calculate", color: "#00B33C" },
+  { name: "Деловые Линии", url: "https://www.dellin.ru/calculator/", color: "#E31E24" },
+  { name: "ПЭК", url: "https://pecom.ru/services-and-tariffs/calculator/", color: "#FF6600" },
+  { name: "Энергия", url: "https://nrg-tk.ru/client/calculator/", color: "#0072C6" },
+  { name: "Байкал Сервис", url: "https://www.baikalsr.ru/calculator/", color: "#1A4B8C" },
+  { name: "КИТ", url: "https://tk-kit.ru/calculator", color: "#E8272C" },
+  { name: "Почта России", url: "https://www.pochta.ru/parcels", color: "#0055A5" },
+];
 
 export interface ProductSizeData {
   size_label: string;
@@ -78,6 +89,7 @@ interface CalculatorSectionProps {
   basePrices: Record<string, number>;
   productNames: string[];
   productSizes: Record<string, ProductSizeData[]>;
+  productDimensions: Record<string, ProductDimensions>;
   paymentOptionsOverride?: PaymentOption[] | null;
   stockWarning?: string;
   dismissWarning?: () => void;
@@ -98,6 +110,7 @@ export default function CalculatorSection({
   basePrices,
   productNames,
   productSizes,
+  productDimensions,
   paymentOptionsOverride,
   stockWarning,
   dismissWarning,
@@ -126,6 +139,29 @@ export default function CalculatorSection({
   const volumeDiscount = getVolumeDiscount(grandSubtotal);
   const grandDiscountAmount = Math.round(grandSubtotal * volumeDiscount);
   const grandTotal = grandSubtotal - grandDiscountAmount;
+
+  const totalWeight = cart.reduce((s, item) => {
+    const d = productDimensions[item.product];
+    return s + (d ? d.unit_weight * item.qty : 0);
+  }, 0);
+  const totalVolume = cart.reduce((s, item) => {
+    const d = productDimensions[item.product];
+    if (!d) return s;
+    const vol = (d.pack_length / 100) * (d.pack_width / 100) * (d.pack_height / 100) * item.qty;
+    return s + vol;
+  }, 0);
+  const totalLength = cart.reduce((s, item) => {
+    const d = productDimensions[item.product];
+    return s + (d ? d.pack_length * item.qty : 0);
+  }, 0);
+  const totalWidth = cart.reduce((s, item) => {
+    const d = productDimensions[item.product];
+    return Math.max(s, d ? d.pack_width : 0);
+  }, 0);
+  const totalHeight = cart.reduce((s, item) => {
+    const d = productDimensions[item.product];
+    return Math.max(s, d ? d.pack_height : 0);
+  }, 0);
 
   const allCartRows = rawRows.map(r => {
     const finalUnit = Math.round(r.unitPrice * (1 - volumeDiscount));
@@ -342,6 +378,53 @@ export default function CalculatorSection({
                 </button>
               </div>
             </div>
+
+            {cart.length > 0 && (
+              <div className="rounded p-5" style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.2)" }}>
+                <div className="flex items-center gap-2 mb-4">
+                  <Icon name="Truck" size={16} style={{ color: "#f57c00" }} />
+                  <span className="text-xs uppercase tracking-widest" style={{ color: "#8a9ab5", fontFamily: "'Oswald', sans-serif" }}>Расчёт доставки</span>
+                </div>
+
+                <div className="flex flex-wrap gap-3 mb-4 px-3 py-3 rounded" style={{ background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.15)" }}>
+                  <div className="text-xs">
+                    <span style={{ color: "#8a9ab5" }}>Общий вес: </span>
+                    <span className="font-bold" style={{ color: "#e8e0d0" }}>{totalWeight.toFixed(1)} кг</span>
+                  </div>
+                  <div className="text-xs">
+                    <span style={{ color: "#8a9ab5" }}>Объём: </span>
+                    <span className="font-bold" style={{ color: "#e8e0d0" }}>{totalVolume.toFixed(3)} м³</span>
+                  </div>
+                  <div className="text-xs">
+                    <span style={{ color: "#8a9ab5" }}>Кол-во: </span>
+                    <span className="font-bold" style={{ color: "#e8e0d0" }}>{totalQty} шт</span>
+                  </div>
+                </div>
+
+                <div className="text-xs mb-3" style={{ color: "#8a9ab5" }}>
+                  Город отправления: <strong style={{ color: "#e8e0d0" }}>Иваново</strong>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {SHIPPING_CALCS.map(tk => (
+                    <a key={tk.name} href={tk.url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-2.5 rounded text-xs no-underline transition-all"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e8e0d0" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = tk.color; (e.currentTarget as HTMLElement).style.background = `${tk.color}10`; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)"; }}>
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: tk.color }} />
+                      <span className="flex-1 truncate">{tk.name}</span>
+                      <Icon name="ExternalLink" size={11} style={{ color: "#8a9ab5" }} />
+                    </a>
+                  ))}
+                </div>
+
+                <div className="text-xs mt-3" style={{ color: "rgba(138,154,181,0.5)" }}>
+                  Перейдите на сайт ТК и укажите вес {totalWeight.toFixed(1)} кг для расчёта стоимости
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
