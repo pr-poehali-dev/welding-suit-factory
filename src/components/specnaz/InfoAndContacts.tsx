@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { NAV_LINKS, CERTS, DELIVERY_ZONES } from "./constants";
+import SewingServices from "./SewingServices";
 
 const SEND_API = "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992";
 
@@ -37,6 +38,8 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
 
   return (
     <>
+      <SewingServices scrollTo={scrollTo} />
+
       {/* ПРОИЗВОДСТВО */}
       <section id="production" className="py-24" style={{ background: "#0d1117" }}>
         <div className="max-w-7xl mx-auto px-4 md:px-8">

@@ -17,7 +17,7 @@ export default function Manager() {
   const [uploading, setUploading] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<"main"|"photos"|"sizes"|"stock">("main");
+  const [activeTab, setActiveTab] = useState<"main"|"photos"|"sizes"|"stock"|"specs">("main");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const [form, setForm] = useState<ManagerForm>(emptyForm());
@@ -63,7 +63,7 @@ export default function Manager() {
   const load = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(API);
+      const res  = await fetch(API + "?show_all=1");
       const data = await res.json();
       setProducts(data.products || []);
     } catch {
@@ -76,7 +76,9 @@ export default function Manager() {
     setEditId(p.id);
     setForm({ name: p.name, category: p.category, description: p.description, gost: p.gost,
       badge: p.badge || "", base_price: p.base_price, image_url: p.image_url, is_active: p.is_active,
-      sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock" });
+      sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock",
+      protection_class: p.protection_class || "", documentation: p.documentation || "",
+      materials: p.materials || "", extra_info: p.extra_info || "" });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
     setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "", stock_qty: s.stock_qty ?? 0 }))) : DEFAULT_SIZES);
     setActiveTab("main");
