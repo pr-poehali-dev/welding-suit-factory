@@ -72,25 +72,25 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
     return (productSizes[product] || []).find(s => s.size_label === size)?.stock_qty ?? 0;
   };
 
-  const showWarn = (product: string, size: string, stock: number) => {
-    setStockWarning(`${product} (${size}) — на складе только ${stock} шт, количество скорректировано`);
-    setTimeout(() => setStockWarning(""), 4000);
-  };
-
   const addToCart = () => {
     if (!addProduct) return;
     const stock = getStockQty(addProduct, addSize);
-    setCart((prev) => {
-      const existing = prev.find((item) => item.product === addProduct && item.size === addSize);
-      if (existing) {
-        let newQty = existing.qty + addQty;
-        if (stock > 0 && newQty > stock) { newQty = stock; showWarn(addProduct, addSize, stock); }
-        return prev.map((item) => item.id === existing.id ? { ...item, qty: newQty } : item);
-      }
+    const existing = cart.find((item) => item.product === addProduct && item.size === addSize);
+
+    let clamped = false;
+    if (existing) {
+      let newQty = existing.qty + addQty;
+      if (stock > 0 && newQty > stock) { newQty = stock; clamped = true; }
+      setCart(prev => prev.map(item => item.id === existing.id ? { ...item, qty: newQty } : item));
+    } else {
       let qty = addQty;
-      if (stock > 0 && qty > stock) { qty = stock; showWarn(addProduct, addSize, stock); }
-      return [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty }];
-    });
+      if (stock > 0 && qty > stock) { qty = stock; clamped = true; }
+      setCart(prev => [...prev, { id: crypto.randomUUID(), product: addProduct, size: addSize, qty }]);
+    }
+
+    if (clamped) {
+      setStockWarning(`${addProduct} (${addSize}) — на складе только ${stock} шт, количество скорректировано`);
+    }
   };
 
   const removeFromCart = (id: string) => {
@@ -99,12 +99,15 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
 
   const updateQty = (id: string, qty: number) => {
     if (qty < 1) return;
-    setCart((prev) => prev.map((item) => {
-      if (item.id !== id) return item;
-      const stock = getStockQty(item.product, item.size);
-      if (stock > 0 && qty > stock) { showWarn(item.product, item.size, stock); return { ...item, qty: stock }; }
-      return { ...item, qty };
-    }));
+    const item = cart.find(i => i.id === id);
+    if (!item) return;
+    const stock = getStockQty(item.product, item.size);
+    if (stock > 0 && qty > stock) {
+      setStockWarning(`${item.product} (${item.size}) — на складе только ${stock} шт, количество скорректировано`);
+      setCart(prev => prev.map(i => i.id === id ? { ...i, qty: stock } : i));
+    } else {
+      setCart(prev => prev.map(i => i.id === id ? { ...i, qty } : i));
+    }
   };
 
   const updateSize = (id: string, size: string) => {
@@ -160,6 +163,7 @@ export default function CatalogAndCalculator({ scrollTo }: CatalogAndCalculatorP
         productNames={productNames}
         productSizes={productSizes}
         stockWarning={stockWarning}
+        dismissWarning={() => setStockWarning("")}
       />
     </>
   );
