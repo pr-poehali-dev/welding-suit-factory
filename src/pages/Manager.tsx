@@ -65,11 +65,18 @@ export default function Manager() {
     try {
       const res  = await fetch(API + "?show_all=1");
       const data = await res.json();
-      setProducts(data.products || []);
+      setProducts((data.products || []).filter((p: Product) => p.is_active));
     } catch {
       setProducts([]);
     }
     setLoading(false);
+  };
+
+  const remove = async (id: number, name: string) => {
+    if (!confirm(`Удалить товар «${name}»? Он будет скрыт с сайта и из менеджера.`)) return;
+    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_product", id }) });
+    notify("Товар удалён");
+    load();
   };
 
   const openEdit = (p: Product) => {
@@ -209,10 +216,14 @@ export default function Manager() {
                 <div className="col-span-2 text-right text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>
                   {p.base_price.toLocaleString("ru-RU")} ₽
                 </div>
-                <div className="col-span-2 flex justify-end">
+                <div className="col-span-2 flex justify-end gap-2">
                   <button onClick={() => openEdit(p)} className="text-xs px-3 py-1.5 rounded"
                     style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.3)", color: "#f57c00", cursor: "pointer" }}>
                     Изменить
+                  </button>
+                  <button onClick={() => remove(p.id, p.name)} className="text-xs px-2 py-1.5 rounded"
+                    style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", cursor: "pointer" }}>
+                    <Icon name="Trash2" size={13} />
                   </button>
                 </div>
               </div>

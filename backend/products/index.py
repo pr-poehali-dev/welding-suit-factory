@@ -239,8 +239,11 @@ def handler(event: dict, context) -> dict:
             return ok({"ok": True})
 
         if action == "delete_product":
+            pid = int(body.get("id", 0))
             conn = get_conn(); cur = conn.cursor()
-            cur.execute(f"UPDATE {SCHEMA}.products SET is_active=false WHERE id=%s", (int(body.get("id", 0)),))
+            cur.execute(f"UPDATE {SCHEMA}.products SET is_active=false WHERE id=%s", (pid,))
+            cur.execute(f"UPDATE {SCHEMA}.product_images SET url='' WHERE product_id=%s", (pid,))
+            cur.execute(f"UPDATE {SCHEMA}.product_sizes SET is_available=false WHERE product_id=%s", (pid,))
             conn.commit(); conn.close()
             return ok({"ok": True})
 
@@ -317,15 +320,18 @@ def handler(event: dict, context) -> dict:
     # ── DELETE — удалить товар / фото / размер ──
     if method == "DELETE":
         action = params.get("action", "product")
+        pid    = int(params.get("id", 0))
         conn   = get_conn()
         cur    = conn.cursor()
 
         if action == "image":
-            cur.execute(f"UPDATE {SCHEMA}.product_images SET url='' WHERE id=%s", (int(params.get("id", 0)),))
+            cur.execute(f"UPDATE {SCHEMA}.product_images SET url='' WHERE id=%s", (pid,))
         elif action == "size":
-            cur.execute(f"UPDATE {SCHEMA}.product_sizes SET is_available=false WHERE id=%s", (int(params.get("id", 0)),))
+            cur.execute(f"UPDATE {SCHEMA}.product_sizes SET is_available=false WHERE id=%s", (pid,))
         else:
-            cur.execute(f"UPDATE {SCHEMA}.products SET is_active=false WHERE id=%s", (int(params.get("id", 0)),))
+            cur.execute(f"UPDATE {SCHEMA}.products SET is_active=false WHERE id=%s", (pid,))
+            cur.execute(f"UPDATE {SCHEMA}.product_images SET url='' WHERE product_id=%s", (pid,))
+            cur.execute(f"UPDATE {SCHEMA}.product_sizes SET is_available=false WHERE product_id=%s", (pid,))
 
         conn.commit()
         conn.close()

@@ -4,7 +4,17 @@ import Icon from "@/components/ui/icon";
 import { ApiProduct, accent, muted, oswald, FALLBACK_IMG } from "./catalogTypes";
 import StockBadge from "./StockBadge";
 
-type DetailTab = "description" | "specs" | "docs" | "materials";
+type DetailTab = "description" | "specs" | "docs" | "materials" | "delivery";
+
+const SHIPPING_CALCS = [
+  { name: "СДЭК", url: "https://www.cdek.ru/ru/calculate", color: "#00B33C" },
+  { name: "Деловые Линии", url: "https://www.dellin.ru/calculator/", color: "#E31E24" },
+  { name: "ПЭК", url: "https://pecom.ru/services-and-tariffs/calculator/", color: "#FF6600" },
+  { name: "Энергия", url: "https://nrg-tk.ru/client/calculator/", color: "#0072C6" },
+  { name: "Байкал Сервис", url: "https://www.baikalsr.ru/calculator/", color: "#1A4B8C" },
+  { name: "КИТ", url: "https://tk-kit.ru/calculator", color: "#E8272C" },
+  { name: "Почта России", url: "https://www.pochta.ru/parcels", color: "#0055A5" },
+];
 
 interface ProductModalProps {
   product: ApiProduct;
@@ -38,6 +48,7 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
     { id: "specs",       label: "Характеристики",  icon: "ShieldCheck", hasContent: !!product.protection_class || !!product.gost || (product.unit_weight > 0) },
     { id: "docs",        label: "Документация",    icon: "BookOpen",  hasContent: !!product.documentation },
     { id: "materials",   label: "Материалы",       icon: "Layers",    hasContent: !!product.materials || !!product.extra_info },
+    { id: "delivery",    label: "Доставка",        icon: "Truck",     hasContent: true },
   ].filter(t => t.hasContent);
 
   useEffect(() => {
@@ -234,6 +245,42 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
                             <p style={{ whiteSpace: "pre-wrap" }}>{product.extra_info}</p>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {tab === "delivery" && (
+                      <div className="space-y-4">
+                        {(product.pack_length > 0 || product.pack_width > 0 || product.pack_height > 0 || product.unit_weight > 0) && (
+                          <div className="flex flex-wrap gap-4 px-3 py-2.5 rounded" style={{ background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.15)" }}>
+                            {(product.pack_length > 0 || product.pack_width > 0 || product.pack_height > 0) && (
+                              <div className="text-xs">
+                                <span style={{ color: muted }}>Габариты: </span>
+                                <span style={{ color: "#e8e0d0" }}>{product.pack_length}×{product.pack_width}×{product.pack_height} см</span>
+                              </div>
+                            )}
+                            {product.unit_weight > 0 && (
+                              <div className="text-xs">
+                                <span style={{ color: muted }}>Вес: </span>
+                                <span style={{ color: "#e8e0d0" }}>{product.unit_weight} кг</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="text-xs mb-1" style={{ color: muted, fontFamily: oswald, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          Рассчитать стоимость доставки
+                        </div>
+                        <div className="text-xs mb-3" style={{ color: muted }}>Город отправления: <strong style={{ color: "#e8e0d0" }}>Иваново</strong></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {SHIPPING_CALCS.map(tk => (
+                            <a key={tk.name} href={tk.url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-2.5 p-2.5 rounded text-xs no-underline transition-all"
+                              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e8e0d0" }}>
+                              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: tk.color }} />
+                              <span className="flex-1">{tk.name}</span>
+                              <Icon name="ExternalLink" size={11} style={{ color: muted }} />
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     )}
 

@@ -23,15 +23,21 @@ interface ManagerProductFormProps {
   notify: (msg: string, ok?: boolean) => void;
 }
 
-const SHIPPING_CALCS = [
-  { name: "СДЭК", url: "https://www.cdek.ru/ru/calculate", color: "#00B33C" },
-  { name: "Деловые Линии", url: "https://www.dellin.ru/calculator/", color: "#E31E24" },
-  { name: "ПЭК", url: "https://pecom.ru/services-and-tariffs/calculator/", color: "#FF6600" },
-  { name: "Энергия", url: "https://nrg-tk.ru/client/calculator/", color: "#0072C6" },
-  { name: "Байкал Сервис", url: "https://www.baikalsr.ru/calculator/", color: "#1A4B8C" },
-  { name: "КИТ", url: "https://tk-kit.ru/calculator", color: "#E8272C" },
-  { name: "Почта России", url: "https://www.pochta.ru/parcels", color: "#0055A5" },
-];
+function getShippingCalcs(weight: number, length: number, width: number, height: number) {
+  const w = weight || 1;
+  const l = length || 30;
+  const wd = width || 20;
+  const h = height || 10;
+  return [
+    { name: "СДЭК", url: `https://www.cdek.ru/ru/calculate?weight=${w}&length=${l}&width=${wd}&height=${h}`, color: "#00B33C" },
+    { name: "Деловые Линии", url: `https://www.dellin.ru/calculator/?weight=${w}&length=${l / 100}&width=${wd / 100}&height=${h / 100}`, color: "#E31E24" },
+    { name: "ПЭК", url: `https://pecom.ru/services-and-tariffs/calculator/`, color: "#FF6600" },
+    { name: "Энергия", url: `https://nrg-tk.ru/client/calculator/`, color: "#0072C6" },
+    { name: "Байкал Сервис", url: `https://www.baikalsr.ru/calculator/`, color: "#1A4B8C" },
+    { name: "КИТ", url: `https://tk-kit.ru/calculator`, color: "#E8272C" },
+    { name: "Почта России", url: `https://www.pochta.ru/parcels`, color: "#0055A5" },
+  ];
+}
 
 export default function ManagerProductForm({
   editId, form, setForm,
@@ -346,9 +352,21 @@ export default function ManagerProductForm({
                   <Icon name="Truck" size={16} style={{ color: "#f57c00" }} />
                   <span className="text-sm font-bold uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.05em" }}>Калькуляторы транспортных компаний</span>
                 </div>
-                <div className="text-xs mb-4" style={{ color: "#8a9ab5" }}>Перейдите на сайт ТК для расчёта стоимости доставки</div>
+                {(form.pack_length > 0 || form.pack_width > 0 || form.pack_height > 0 || form.unit_weight > 0) ? (
+                  <div className="flex flex-wrap gap-3 mb-4 px-3 py-2 rounded" style={{ background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.15)" }}>
+                    <span className="text-xs" style={{ color: "#4ade80" }}>
+                      <Icon name="Check" size={11} style={{ display: "inline", marginRight: 4 }} />
+                      Габариты подставлены: {form.pack_length}×{form.pack_width}×{form.pack_height} см, {form.unit_weight} кг
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded" style={{ background: "rgba(250,204,21,0.06)", border: "1px solid rgba(250,204,21,0.15)" }}>
+                    <Icon name="AlertTriangle" size={12} style={{ color: "#facc15" }} />
+                    <span className="text-xs" style={{ color: "#facc15" }}>Заполните габариты выше — они подставятся в калькуляторы ТК</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
-                  {SHIPPING_CALCS.map(tk => (
+                  {getShippingCalcs(form.unit_weight, form.pack_length, form.pack_width, form.pack_height).map(tk => (
                     <a key={tk.name} href={tk.url} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-3 p-3 rounded text-sm no-underline transition-all hover:scale-[1.02]"
                       style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e8e0d0", cursor: "pointer" }}>
