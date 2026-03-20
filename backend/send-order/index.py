@@ -143,7 +143,12 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
         row += 1
 
     row += 1
-    NCOLS = 6
+    all_items = []
+    for g in groups:
+        all_items.extend(g.get("items", []))
+    has_savings = any(item.get("saving", 0) > 0 for item in all_items)
+    NCOLS = 7 if has_savings else 6
+
     for g in groups:
         g_payment = g.get("payment", "")
         g_desc = g.get("paymentDesc", "")
@@ -161,6 +166,8 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
         row += 1
 
         headers = ["Артикул", "Размер", "Кол-во", "Цена без скидки", "Цена/шт", "Сумма, ₽"]
+        if has_savings:
+            headers.append("Экономия, ₽")
         for col, h in enumerate(headers, 1):
             c = ws.cell(row=row, column=col, value=h)
             c.font = HEADER_FONT
@@ -169,6 +176,7 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
         row += 1
 
         for item in g_items:
+            saving = item.get("saving", 0)
             ws.cell(row=row, column=1, value=item.get("product", "")).font = Font(name="Arial", size=10)
             ws.cell(row=row, column=2, value=item.get("size", "")).font = Font(name="Arial", size=10)
             ws.cell(row=row, column=2).alignment = Alignment(horizontal="center")
@@ -186,6 +194,10 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
             lt.font = Font(name="Arial", bold=True, size=10)
             lt.alignment = Alignment(horizontal="right")
             lt.number_format = '#,##0'
+            if has_savings:
+                sv = ws.cell(row=row, column=7, value=f"-{saving:,}" if saving > 0 else "—")
+                sv.font = Font(name="Arial", size=10, color="4CAF50" if saving > 0 else "999999")
+                sv.alignment = Alignment(horizontal="right")
             for col in range(1, NCOLS + 1):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
@@ -198,6 +210,17 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
         gt.alignment = Alignment(horizontal="right")
         gt.number_format = '#,##0'
         row += 2
+
+    total_saving = sum(item.get("saving", 0) for item in all_items)
+    if total_saving > 0:
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=NCOLS - 1)
+        ws.cell(row=row, column=1, value="Общая экономия:").font = Font(name="Arial", bold=True, size=11, color="4CAF50")
+        ws.cell(row=row, column=1).alignment = Alignment(horizontal="right")
+        ts = ws.cell(row=row, column=NCOLS, value=total_saving)
+        ts.font = Font(name="Arial", bold=True, size=11, color="4CAF50")
+        ts.alignment = Alignment(horizontal="right")
+        ts.number_format = '-#,##0'
+        row += 1
 
     if subtotal != total and volume_discount > 0:
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=NCOLS - 1)
@@ -267,6 +290,13 @@ def build_client_html(contact, with_logo, subtotal, volume_discount, total, grou
     discount_pct = round(volume_discount * 100) if volume_discount else 0
     td = 'style="padding:5px 8px;border:1px solid #ddd;font-size:12px'
 
+    cli_all_items = []
+    for gg in groups:
+        cli_all_items.extend(gg.get("items", []))
+    cli_has_savings = any(i.get("saving", 0) > 0 for i in cli_all_items)
+    cli_total_saving = sum(i.get("saving", 0) for i in cli_all_items)
+    cli_ncols = 6 if cli_has_savings else 5
+
     groups_html = ""
     for g in groups:
         g_payment = g.get("payment", "")
@@ -277,6 +307,8 @@ def build_client_html(contact, with_logo, subtotal, volume_discount, total, grou
 
         rows = ""
         for item in g_items:
+            saving = item.get('saving', 0)
+            saving_td = f'<td {td};text-align:right;color:#4CAF50">−{saving:,}</td>' if cli_has_savings and saving > 0 else (f'<td {td};text-align:right;color:#999">—</td>' if cli_has_savings else "")
             rows += f"""
       <tr>
         <td {td}">{item.get('product','')}</td>
@@ -284,49 +316,56 @@ def build_client_html(contact, with_logo, subtotal, volume_discount, total, grou
         <td {td};text-align:center">{item.get('qty','')}</td>
         <td {td};text-align:right;font-weight:bold">{item.get('unitPrice',0):,}</td>
         <td {td};text-align:right;font-weight:bold">{item.get('lineTotal',0):,}</td>
+        {saving_td}
       </tr>"""
 
+        saving_th = f'<th {td};color:#fff;text-align:right">Экономия</th>' if cli_has_savings else ""
         groups_html += f"""
     <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
-      <tr><td colspan="5" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
+      <tr><td colspan="{cli_ncols}" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
       <tr style="background:#f57c00">
         <th {td};color:#fff">Артикул</th>
         <th {td};color:#fff;text-align:center">Размер</th>
         <th {td};color:#fff;text-align:center">Кол-во</th>
         <th {td};color:#fff;text-align:right">Цена/шт</th>
         <th {td};color:#fff;text-align:right">Сумма</th>
+        {saving_th}
       </tr>
       {rows}
       <tr style="background:#f5f5f5">
-        <td colspan="4" {td};text-align:right;color:#666">Подитог:</td>
+        <td colspan="{cli_ncols - 1}" {td};text-align:right;color:#666">Подитог:</td>
         <td {td};text-align:right;font-weight:bold;color:#f57c00;font-size:13px">{g_total:,} ₽</td>
       </tr>
     </table>"""
 
     footer_rows = ""
+    if cli_total_saving > 0:
+        footer_rows += f"""
+      <tr><td colspan="{cli_ncols - 1}" {td};text-align:right;color:#4CAF50;font-weight:bold;border:none">Общая экономия:</td><td {td};text-align:right;color:#4CAF50;font-weight:bold;border:none">−{cli_total_saving:,} ₽</td></tr>"""
     if subtotal != total and discount_pct > 0:
         footer_rows += f"""
-      <tr><td colspan="4" {td};text-align:right;color:#666;border:none">Сумма без скидки:</td><td {td};text-align:right;color:#666;border:none">{subtotal:,} ₽</td></tr>
-      <tr><td colspan="4" {td};text-align:right;color:#4CAF50;border:none">Скидка за объём ({discount_pct}%):</td><td {td};text-align:right;color:#4CAF50;border:none">−{subtotal - total:,} ₽</td></tr>"""
+      <tr><td colspan="{cli_ncols - 1}" {td};text-align:right;color:#666;border:none">Сумма без скидки:</td><td {td};text-align:right;color:#666;border:none">{subtotal:,} ₽</td></tr>
+      <tr><td colspan="{cli_ncols - 1}" {td};text-align:right;color:#4CAF50;border:none">Скидка за объём ({discount_pct}%):</td><td {td};text-align:right;color:#4CAF50;border:none">−{subtotal - total:,} ₽</td></tr>"""
 
+    ccr = cli_ncols - 1
     return f"""
 <div style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto">
   <table style="width:100%;border-collapse:collapse">
-    <tr><td colspan="5" style="background:#f57c00;padding:12px 16px">
+    <tr><td colspan="{cli_ncols}" style="background:#f57c00;padding:12px 16px">
       <span style="color:#fff;font-size:18px;font-weight:bold;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА</span>
     </td></tr>
-    <tr><td colspan="5" style="padding:12px 8px;font-size:14px;color:#222">
+    <tr><td colspan="{cli_ncols}" style="padding:12px 8px;font-size:14px;color:#222">
       {name}, благодарим Вас за обращение!<br>
       Ваша заявка принята. Менеджер свяжется с Вами в ближайшее время.
     </td></tr>
-    <tr><td {td};color:#666;width:160px">Нанесение логотипа</td><td colspan="4" {td}">{logo_label}</td></tr>
-    {"<tr><td " + td + ";color:#666" + '">Скидка за объём</td><td colspan="4" ' + td + ";color:#4CAF50;font-weight:bold" + '">' + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
+    <tr><td {td};color:#666;width:160px">Нанесение логотипа</td><td colspan="{ccr}" {td}">{logo_label}</td></tr>
+    {"<tr><td " + td + ";color:#666" + '">Скидка за объём</td><td colspan="' + str(ccr) + '" ' + td + ";color:#4CAF50;font-weight:bold" + '">' + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
   </table>
   <div style="height:12px"></div>
   {groups_html}
   <table style="width:100%;border-collapse:collapse">
     {footer_rows}
-    <tr style="background:#fff3e0"><td colspan="4" {td};text-align:right;font-weight:bold;font-size:14px;border:2px solid #f57c00">ИТОГО:</td><td {td};text-align:right;font-weight:bold;font-size:16px;color:#f57c00;border:2px solid #f57c00">{total:,} ₽</td></tr>
+    <tr style="background:#fff3e0"><td colspan="{ccr}" {td};text-align:right;font-weight:bold;font-size:14px;border:2px solid #f57c00">ИТОГО:</td><td {td};text-align:right;font-weight:bold;font-size:16px;color:#f57c00;border:2px solid #f57c00">{total:,} ₽</td></tr>
   </table>
   <table style="width:100%;border-collapse:collapse;margin-top:16px">
     <tr><td {td};color:#666;border:none;width:80px">Телефон:</td><td {td};border:none"><a href="tel:+79308852555" style="color:#f57c00;text-decoration:none;font-weight:bold">8-930-885-25-55</a></td></tr>
@@ -434,6 +473,10 @@ def handler(event: dict, context) -> dict:
         discount_pct = round(volume_discount * 100) if volume_discount else 0
 
         td = 'style="padding:5px 8px;border:1px solid #ddd;font-size:12px'
+        mgr_has_savings = any(item.get("saving", 0) > 0 for item in all_items)
+        mgr_total_saving = sum(item.get("saving", 0) for item in all_items)
+        ncols_html = 7 if mgr_has_savings else 6
+
         groups_html = ""
         for g in groups:
             g_payment = g.get("payment", "")
@@ -444,6 +487,8 @@ def handler(event: dict, context) -> dict:
 
             rows = ""
             for item in g_items:
+                saving = item.get('saving', 0)
+                saving_td = f'<td {td};text-align:right;color:#4CAF50">−{saving:,}</td>' if mgr_has_savings and saving > 0 else (f'<td {td};text-align:right;color:#999">—</td>' if mgr_has_savings else "")
                 rows += f"""
       <tr>
         <td {td}">{item.get('product','')}</td>
@@ -452,11 +497,13 @@ def handler(event: dict, context) -> dict:
         <td {td};text-align:right;color:#999">{item.get('unitPriceFull', item.get('unitPrice',0)):,}</td>
         <td {td};text-align:right;font-weight:bold">{item.get('unitPrice',0):,}</td>
         <td {td};text-align:right;font-weight:bold">{item.get('lineTotal',0):,}</td>
+        {saving_td}
       </tr>"""
 
+            saving_th = f'<th {td};color:#fff;text-align:right">Экономия</th>' if mgr_has_savings else ""
             groups_html += f"""
     <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
-      <tr><td colspan="6" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
+      <tr><td colspan="{ncols_html}" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
       <tr style="background:#f57c00">
         <th {td};color:#fff">Артикул</th>
         <th {td};color:#fff;text-align:center">Размер</th>
@@ -464,39 +511,45 @@ def handler(event: dict, context) -> dict:
         <th {td};color:#fff;text-align:right">Цена до скидки</th>
         <th {td};color:#fff;text-align:right">Цена/шт</th>
         <th {td};color:#fff;text-align:right">Сумма</th>
+        {saving_th}
       </tr>
       {rows}
       <tr style="background:#f5f5f5">
-        <td colspan="5" {td};text-align:right;color:#666">Подитог ({pay_label}):</td>
+        <td colspan="{ncols_html - 1}" {td};text-align:right;color:#666">Подитог ({pay_label}):</td>
         <td {td};text-align:right;font-weight:bold;color:#f57c00;font-size:13px">{g_total:,} ₽</td>
       </tr>
     </table>"""
 
         footer_rows = ""
+        if mgr_total_saving > 0:
+            footer_rows += f"""
+      <tr><td colspan="{ncols_html - 1}" {td};text-align:right;color:#4CAF50;font-weight:bold;border:none">Общая экономия:</td><td {td};text-align:right;color:#4CAF50;font-weight:bold;border:none">−{mgr_total_saving:,} ₽</td></tr>"""
         if subtotal != total and discount_pct > 0:
             footer_rows += f"""
-      <tr><td colspan="5" {td};text-align:right;color:#666;border:none">Сумма без скидки:</td><td {td};text-align:right;color:#666;border:none">{subtotal:,} ₽</td></tr>
-      <tr><td colspan="5" {td};text-align:right;color:#4CAF50;border:none">Скидка за объём ({discount_pct}%):</td><td {td};text-align:right;color:#4CAF50;border:none">−{subtotal - total:,} ₽</td></tr>"""
+      <tr><td colspan="{ncols_html - 1}" {td};text-align:right;color:#666;border:none">Сумма без скидки:</td><td {td};text-align:right;color:#666;border:none">{subtotal:,} ₽</td></tr>
+      <tr><td colspan="{ncols_html - 1}" {td};text-align:right;color:#4CAF50;border:none">Скидка за объём ({discount_pct}%):</td><td {td};text-align:right;color:#4CAF50;border:none">−{subtotal - total:,} ₽</td></tr>"""
 
+        cs = ncols_html
+        csr = cs - 1
         html = f"""
 <div style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto">
   <table style="width:100%;border-collapse:collapse">
-    <tr><td colspan="6" style="background:#f57c00;padding:12px 16px">
+    <tr><td colspan="{cs}" style="background:#f57c00;padding:12px 16px">
       <span style="color:#fff;font-size:18px;font-weight:bold;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА — Заказ из калькулятора</span>
     </td></tr>
-    <tr><td colspan="6" style="padding:4px 8px;text-align:right;color:#999;font-size:11px">Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}</td></tr>
-    <tr><td {td};color:#666;width:160px">Организация</td><td colspan="5" {td};font-weight:bold">{org}</td></tr>
-    <tr><td {td};color:#666">Контактное лицо</td><td colspan="5" {td};font-weight:bold">{contact}</td></tr>
-    <tr><td {td};color:#666">Телефон</td><td colspan="5" {td};font-weight:bold;color:#f57c00">{phone}</td></tr>
-    <tr><td {td};color:#666">E-mail</td><td colspan="5" {td}">{email or '—'}</td></tr>
-    <tr><td {td};color:#666">Нанесение логотипа</td><td colspan="5" {td}">{logo_label}</td></tr>
-    {"<tr><td " + td + ";color:#666" + '">Скидка за объём</td><td colspan="5" ' + td + ";color:#4CAF50;font-weight:bold" + '">' + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
+    <tr><td colspan="{cs}" style="padding:4px 8px;text-align:right;color:#999;font-size:11px">Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}</td></tr>
+    <tr><td {td};color:#666;width:160px">Организация</td><td colspan="{csr}" {td};font-weight:bold">{org}</td></tr>
+    <tr><td {td};color:#666">Контактное лицо</td><td colspan="{csr}" {td};font-weight:bold">{contact}</td></tr>
+    <tr><td {td};color:#666">Телефон</td><td colspan="{csr}" {td};font-weight:bold;color:#f57c00">{phone}</td></tr>
+    <tr><td {td};color:#666">E-mail</td><td colspan="{csr}" {td}">{email or '—'}</td></tr>
+    <tr><td {td};color:#666">Нанесение логотипа</td><td colspan="{csr}" {td}">{logo_label}</td></tr>
+    {"<tr><td " + td + ";color:#666" + '">Скидка за объём</td><td colspan="' + str(csr) + '" ' + td + ";color:#4CAF50;font-weight:bold" + '">' + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
   </table>
   <div style="height:12px"></div>
   {groups_html}
   <table style="width:100%;border-collapse:collapse">
     {footer_rows}
-    <tr style="background:#fff3e0"><td colspan="5" {td};text-align:right;font-weight:bold;font-size:14px;border:2px solid #f57c00">ИТОГО К ОПЛАТЕ:</td><td {td};text-align:right;font-weight:bold;font-size:16px;color:#f57c00;border:2px solid #f57c00">{total:,} ₽</td></tr>
+    <tr style="background:#fff3e0"><td colspan="{csr}" {td};text-align:right;font-weight:bold;font-size:14px;border:2px solid #f57c00">ИТОГО К ОПЛАТЕ:</td><td {td};text-align:right;font-weight:bold;font-size:16px;color:#f57c00;border:2px solid #f57c00">{total:,} ₽</td></tr>
   </table>
   <div style="background:#eee;padding:8px 16px;font-size:11px;color:#999;margin-top:8px">
     Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
