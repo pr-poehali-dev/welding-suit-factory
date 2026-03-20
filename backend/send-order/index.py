@@ -343,24 +343,10 @@ def save_lead(org, contact, phone, email, message, kind, order_json, order_total
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute(
-        f"SELECT id FROM {SCHEMA}.leads WHERE phone=%s ORDER BY created_at DESC LIMIT 1",
-        (phone,)
+        f"""INSERT INTO {SCHEMA}.leads (org, contact, phone, email, message, kind, order_json, order_total)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+        (org, contact, phone, email, message, kind, order_json, order_total)
     )
-    row = cur.fetchone()
-    if row:
-        cur.execute(
-            f"""UPDATE {SCHEMA}.leads
-                SET org=%s, contact=%s, email=%s, message=%s, kind=%s,
-                    order_json=%s, order_total=%s, created_at=now()
-                WHERE id=%s""",
-            (org, contact, email, message, kind, order_json, order_total, row[0])
-        )
-    else:
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.leads (org, contact, phone, email, message, kind, order_json, order_total)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (org, contact, phone, email, message, kind, order_json, order_total)
-        )
     conn.commit()
     conn.close()
 
@@ -438,7 +424,9 @@ def handler(event: dict, context) -> dict:
         volume_discount = body.get("volumeDiscount", 0)
         total           = body.get("total", 0)
         items           = body.get("items", [])
-        save_lead(org, contact, phone, email, "", "order", json.dumps(items, ensure_ascii=False), total)
+        order_type      = body.get("orderType", "stock")
+        type_label      = "В наличии" if order_type == "stock" else "Под заказ"
+        save_lead(org, contact, phone, email, "", f"order_{order_type}", json.dumps(items, ensure_ascii=False), total)
 
         excel = build_order_excel(org, contact, phone, email, payment, payment_desc, with_logo, subtotal, volume_discount, total, items)
 
@@ -485,7 +473,7 @@ def handler(event: dict, context) -> dict:
         html = f"""
 <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
   <div style="background:#f57c00;padding:16px 24px">
-    <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА — заявка из калькулятора</h1>
+    <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА — {type_label}</h1>
   </div>
   <div style="background:#f9f9f9;padding:24px;border:1px solid #eee">
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
@@ -524,12 +512,12 @@ def handler(event: dict, context) -> dict:
     Заявка отправлена с сайта спецназфабрика.рф · Excel-файл во вложении
   </div>
 </div>"""
-        fname = f"Заказ_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx"
-        send_email(f"Заказ из калькулятора на {total:,} ₽ — спецназфабрика.рф", html, excel_bytes=excel, excel_filename=fname)
+        fname = f"Заказ_{type_label}_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx"
+        send_email(f"{type_label} на {total:,} ₽ — спецназфабрика.рф", html, excel_bytes=excel, excel_filename=fname)
 
         if email and "@" in email:
             client_html = build_client_html(contact, payment, payment_desc, with_logo, volume_discount, total, items)
-            send_email(f"Ваш заказ на {total:,} ₽ — СПЕЦНАЗ ФАБРИКА", client_html, to=[email], excel_bytes=excel, excel_filename=fname)
+            send_email(f"Ваш заказ ({type_label.lower()}) на {total:,} ₽ — СПЕЦНАЗ ФАБРИКА", client_html, to=[email], excel_bytes=excel, excel_filename=fname)
 
     else:
         return {"statusCode": 400, "headers": {**cors(), "Content-Type": "application/json"}, "body": json.dumps({"error": "unknown kind"})}
