@@ -21,6 +21,14 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
   const availSizes = product.sizes?.filter(s => s.is_available) ?? [];
   const currentSizeObj = availSizes.find(s => s.size_label === selectedSize) ?? availSizes[0];
   const price = product.base_price + (currentSizeObj?.price_add ?? 0);
+
+  const stkInfo = (qty: number) => {
+    if (qty === 0) return { color: "#f87171", label: "Под заказ" };
+    if (qty < 20)  return { color: "#facc15", label: "Мало" };
+    if (qty <= 100) return { color: "#4ade80", label: "В наличии" };
+    return { color: "#60a5fa", label: "Много" };
+  };
+  const curStk = stkInfo(currentSizeObj?.stock_qty ?? 0);
   const allImgs = product.images?.length
     ? product.images.map(i => i.url)
     : [product.image_url || FALLBACK_IMG];
@@ -92,16 +100,25 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
                 <div className="mb-3">
                   <div className="text-xs mb-1.5 uppercase tracking-wider" style={{ color: muted, fontFamily: oswald }}>Размер / Рост</div>
                   {availSizes.length > 0 ? (
-                    <select value={selectedSize}
-                      onChange={e => setSelectedSize(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded outline-none"
-                      style={{ background: "#13181f", border: "1px solid rgba(245,124,0,0.3)", color: "#e8e0d0" }}>
-                      {availSizes.map(s => (
-                        <option key={s.size_label} value={s.size_label}>
-                          {s.size_label}{s.price_add > 0 ? ` (+${s.price_add.toLocaleString("ru-RU")} ₽)` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select value={selectedSize}
+                        onChange={e => setSelectedSize(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded outline-none"
+                        style={{ background: "#13181f", border: `1px solid ${curStk.color}40`, color: curStk.color }}>
+                        {availSizes.map(s => {
+                          const si = stkInfo(s.stock_qty ?? 0);
+                          return (
+                            <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#13181f" }}>
+                              {s.size_label}{s.price_add > 0 ? ` (+${s.price_add.toLocaleString("ru-RU")} ₽)` : ""} — {si.label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <div className="w-2 h-2 rounded-full" style={{ background: curStk.color }} />
+                        <span className="text-xs font-medium" style={{ color: curStk.color }}>{curStk.label}</span>
+                      </div>
+                    </>
                   ) : (
                     <select value={selectedSize} onChange={e => setSelectedSize(e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded outline-none"

@@ -1,6 +1,12 @@
 import Icon from "@/components/ui/icon";
 import { ApiProduct, accent, muted, oswald, FALLBACK_IMG, CHESTNIY_ZNAK_IMG } from "./catalogTypes";
-import StockBadge from "./StockBadge";
+
+function stockInfo(qty: number) {
+  if (qty === 0) return { color: "#f87171", label: "Под заказ" };
+  if (qty < 20)  return { color: "#facc15", label: "Мало" };
+  if (qty <= 100) return { color: "#4ade80", label: "В наличии" };
+  return { color: "#60a5fa", label: "Много" };
+}
 
 interface ProductCardProps {
   product: ApiProduct;
@@ -15,6 +21,7 @@ export default function ProductCard({ product, currentSize, onSizeChange, onOpen
   const currentSizeData = availableSizes.find(s => s.size_label === currentSize);
   const priceAdd = currentSizeData?.price_add ?? 0;
   const cardPrice = product.base_price + priceAdd;
+  const currentStock = stockInfo(currentSizeData?.stock_qty ?? 0);
 
   return (
     <div className="product-card rounded overflow-hidden flex flex-col" style={{ background: "#13181f" }}>
@@ -49,17 +56,21 @@ export default function ProductCard({ product, currentSize, onSizeChange, onOpen
             value={currentSize}
             onChange={(e) => onSizeChange(e.target.value)}
             className="w-full px-3 py-2 text-xs rounded"
-            style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.25)", color: "#e8e0d0", outline: "none" }}
+            style={{ background: "#0d1117", border: `1px solid ${currentStock.color}40`, color: currentStock.color, outline: "none" }}
           >
-            {availableSizes.map((s) => (
-              <option key={s.size_label} value={s.size_label}>
-                {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""}
-              </option>
-            ))}
+            {availableSizes.map((s) => {
+              const si = stockInfo(s.stock_qty ?? 0);
+              return (
+                <option key={s.size_label} value={s.size_label} style={{ color: si.color, background: "#0d1117" }}>
+                  {s.size_label}{s.price_add > 0 ? ` (+${s.price_add} ₽)` : ""} — {si.label}
+                </option>
+              );
+            })}
           </select>
-        </div>
-        <div className="mb-3">
-          <StockBadge status={product.stock_status ?? "in_stock"} />
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <div className="w-2 h-2 rounded-full" style={{ background: currentStock.color }} />
+            <span className="text-xs font-medium" style={{ color: currentStock.color }}>{currentStock.label}</span>
+          </div>
         </div>
         <div className="mt-auto pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid rgba(245,124,0,0.1)" }}>
           <div className="flex items-center justify-between">

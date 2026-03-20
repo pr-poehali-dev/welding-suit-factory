@@ -26,7 +26,7 @@ export interface ApiProduct {
   materials: string;
   extra_info: string;
   images: { id: number; url: string; sort_order: number }[];
-  sizes: { id: number; size_label: string; price_add: number; is_available: boolean; gtin: string }[];
+  sizes: { id: number; size_label: string; price_add: number; is_available: boolean; gtin: string; stock_qty: number }[];
   barcode_url: string;
 }
 
@@ -35,4 +35,3 @@ export const muted = "#8a9ab5";
 export const oswald = "'Oswald', sans-serif";
 export const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/3f2a3aec-d043-4d9c-9fd7-97ee66727a80.jpg";
 export const CHESTNIY_ZNAK_IMG = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/bucket/13d96f42-3da7-4dbe-bfcc-50c514929a23.png";
-
