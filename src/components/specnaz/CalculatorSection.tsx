@@ -119,7 +119,7 @@ export default function CalculatorSection({
           subtotal,
           volumeDiscount,
           total: totalPrice,
-          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPrice: r.finalUnit, lineTotal: r.finalLine })),
+          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPriceFull: r.unitPrice, unitPrice: r.finalUnit, lineTotal: r.finalLine, saving: r.lineSaving })),
         }),
       });
       setSent(true);
