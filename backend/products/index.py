@@ -123,11 +123,14 @@ def handler(event: dict, context) -> dict:
         show_all = params.get("show_all") == "1"
         where = "" if show_all else " WHERE is_active=true"
         cur.execute(
-            f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info "
+            f"SELECT id, name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info, pack_length, pack_width, pack_height, unit_weight "
             f"FROM {SCHEMA}.products{where} ORDER BY sort_order, id"
         )
-        cols     = ["id","name","category","description","gost","badge","base_price","image_url","is_active","sort_order","stock_status","gtin","barcode_url","protection_class","documentation","materials","extra_info"]
+        cols     = ["id","name","category","description","gost","badge","base_price","image_url","is_active","sort_order","stock_status","gtin","barcode_url","protection_class","documentation","materials","extra_info","pack_length","pack_width","pack_height","unit_weight"]
         products = [dict(zip(cols, r)) for r in cur.fetchall()]
+        for p in products:
+            for k in ("pack_length", "pack_width", "pack_height", "unit_weight"):
+                p[k] = float(p[k]) if p[k] else 0
 
         if products:
             ids = [str(p["id"]) for p in products]
@@ -265,13 +268,14 @@ def handler(event: dict, context) -> dict:
             barcode_url = upload_svg_to_s3(svg, f"barcodes/{uuid.uuid4()}.svg")
         cur.execute(
             f"""INSERT INTO {SCHEMA}.products
-                (name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (name, category, description, gost, badge, base_price, image_url, is_active, sort_order, stock_status, gtin, barcode_url, protection_class, documentation, materials, extra_info, pack_length, pack_width, pack_height, unit_weight)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (body.get("name",""), body.get("category",""), body.get("description",""), body.get("gost",""),
              body.get("badge") or None, int(body.get("base_price",0)), body.get("image_url") or None,
              bool(body.get("is_active",True)), int(body.get("sort_order",0)),
              body.get("stock_status","in_stock"), gtin, barcode_url,
-             body.get("protection_class",""), body.get("documentation",""), body.get("materials",""), body.get("extra_info","")),
+             body.get("protection_class",""), body.get("documentation",""), body.get("materials",""), body.get("extra_info",""),
+             float(body.get("pack_length",0)), float(body.get("pack_width",0)), float(body.get("pack_height",0)), float(body.get("unit_weight",0))),
         )
         new_id = cur.fetchone()[0]
         conn.commit()
@@ -295,6 +299,7 @@ def handler(event: dict, context) -> dict:
                     base_price=%s, image_url=%s, is_active=%s, sort_order=%s,
                     stock_status=%s, gtin=%s, barcode_url=%s,
                     protection_class=%s, documentation=%s, materials=%s, extra_info=%s,
+                    pack_length=%s, pack_width=%s, pack_height=%s, unit_weight=%s,
                     updated_at=NOW()
                 WHERE id=%s""",
             (body.get("name",""), body.get("category",""), body.get("description",""), body.get("gost",""),
@@ -302,6 +307,7 @@ def handler(event: dict, context) -> dict:
              bool(body.get("is_active",True)), int(body.get("sort_order",0)),
              body.get("stock_status","in_stock"), gtin, barcode_url,
              body.get("protection_class",""), body.get("documentation",""), body.get("materials",""), body.get("extra_info",""),
+             float(body.get("pack_length",0)), float(body.get("pack_width",0)), float(body.get("pack_height",0)), float(body.get("unit_weight",0)),
              int(body["id"])),
         )
         conn.commit()

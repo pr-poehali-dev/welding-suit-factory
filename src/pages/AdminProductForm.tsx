@@ -242,6 +242,23 @@ export default function AdminProductForm({
                 </div>
               </div>
 
+              <div className="mt-2 p-4 rounded-lg" style={{ background: "#0d1117", border: "1px solid rgba(245,124,0,0.15)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon name="Box" size={14} style={{ color: "#f57c00" }} />
+                  <span className="text-xs font-bold uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.05em" }}>Габариты и вес</span>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                  <div><div style={labelStyle} className="mb-1">Длина, см</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpStyle} value={form.pack_length || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, pack_length: v === "" ? 0 : parseFloat(v) })); }} placeholder="60" /></div>
+                  <div><div style={labelStyle} className="mb-1">Ширина, см</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpStyle} value={form.pack_width || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, pack_width: v === "" ? 0 : parseFloat(v) })); }} placeholder="40" /></div>
+                  <div><div style={labelStyle} className="mb-1">Высота, см</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpStyle} value={form.pack_height || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, pack_height: v === "" ? 0 : parseFloat(v) })); }} placeholder="15" /></div>
+                  <div><div style={labelStyle} className="mb-1">Вес, кг</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpStyle} value={form.unit_weight || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, unit_weight: v === "" ? 0 : parseFloat(v) })); }} placeholder="1.8" /></div>
+                </div>
+              </div>
+
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded"
                 style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)" }}>
                 <input type="checkbox" checked={form.is_active}

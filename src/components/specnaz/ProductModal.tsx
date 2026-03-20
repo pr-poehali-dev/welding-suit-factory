@@ -35,7 +35,7 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
 
   const tabs: { id: DetailTab; label: string; icon: string; hasContent: boolean }[] = [
     { id: "description", label: "Описание",        icon: "FileText",  hasContent: !!product.description },
-    { id: "specs",       label: "Характеристики",  icon: "ShieldCheck", hasContent: !!product.protection_class || !!product.gost },
+    { id: "specs",       label: "Характеристики",  icon: "ShieldCheck", hasContent: !!product.protection_class || !!product.gost || (product.unit_weight > 0) },
     { id: "docs",        label: "Документация",    icon: "BookOpen",  hasContent: !!product.documentation },
     { id: "materials",   label: "Материалы",       icon: "Layers",    hasContent: !!product.materials || !!product.extra_info },
   ].filter(t => t.hasContent);
@@ -186,6 +186,18 @@ export default function ProductModal({ product, onClose, onAddToCalc, selectedSi
                           <div className="flex gap-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                             <span className="flex-shrink-0 text-xs uppercase tracking-wider" style={{ color: muted, fontFamily: oswald, minWidth: 160 }}>ГОСТ / Стандарт</span>
                             <span>{product.gost}</span>
+                          </div>
+                        )}
+                        {(product.pack_length > 0 || product.pack_width > 0 || product.pack_height > 0) && (
+                          <div className="flex gap-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <span className="flex-shrink-0 text-xs uppercase tracking-wider" style={{ color: muted, fontFamily: oswald, minWidth: 160 }}>Габариты упаковки</span>
+                            <span>{product.pack_length} x {product.pack_width} x {product.pack_height} см</span>
+                          </div>
+                        )}
+                        {product.unit_weight > 0 && (
+                          <div className="flex gap-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <span className="flex-shrink-0 text-xs uppercase tracking-wider" style={{ color: muted, fontFamily: oswald, minWidth: 160 }}>Вес единицы</span>
+                            <span>{product.unit_weight} кг</span>
                           </div>
                         )}
                         {availSizes.length > 0 && (

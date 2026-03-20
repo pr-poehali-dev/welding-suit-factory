@@ -78,7 +78,9 @@ export default function Manager() {
       badge: p.badge || "", base_price: p.base_price, image_url: p.image_url, is_active: p.is_active,
       sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock",
       protection_class: p.protection_class || "", documentation: p.documentation || "",
-      materials: p.materials || "", extra_info: p.extra_info || "" });
+      materials: p.materials || "", extra_info: p.extra_info || "",
+      pack_length: p.pack_length || 0, pack_width: p.pack_width || 0,
+      pack_height: p.pack_height || 0, unit_weight: p.unit_weight || 0 });
     setFormImages((p.images || []).map(i => ({ url: i.url })));
     setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "", stock_qty: s.stock_qty ?? 0 }))) : DEFAULT_SIZES);
     setActiveTab("main");

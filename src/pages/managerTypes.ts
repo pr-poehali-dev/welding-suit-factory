@@ -19,6 +19,7 @@ export interface Product {
   is_active: boolean; sort_order: number; stock_status: StockStatus;
   gtin: string; barcode_url: string;
   protection_class: string; documentation: string; materials: string; extra_info: string;
+  pack_length: number; pack_width: number; pack_height: number; unit_weight: number;
   images: ProductImage[]; sizes: ProductSize[];
 }
 
@@ -27,6 +28,7 @@ export type ManagerForm = {
   base_price: number; image_url: string | null; is_active: boolean; sort_order: number;
   stock_status: StockStatus;
   protection_class: string; documentation: string; materials: string; extra_info: string;
+  pack_length: number; pack_width: number; pack_height: number; unit_weight: number;
 };
 
 export const emptyForm = (): ManagerForm => ({
@@ -34,6 +36,7 @@ export const emptyForm = (): ManagerForm => ({
   gost: "", badge: "", base_price: 0, image_url: null,
   is_active: true, sort_order: 0, stock_status: "in_stock",
   protection_class: "", documentation: "", materials: "", extra_info: "",
+  pack_length: 0, pack_width: 0, pack_height: 0, unit_weight: 0,
 });
 
 const SIZE_GROUPS = ["40-42","44-46","48-50","52-54","56-58","60-62","64-66","68-70","72-74","76-78"];

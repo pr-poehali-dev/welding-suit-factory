@@ -25,6 +25,10 @@ export interface ApiProduct {
   documentation: string;
   materials: string;
   extra_info: string;
+  pack_length: number;
+  pack_width: number;
+  pack_height: number;
+  unit_weight: number;
   images: { id: number; url: string; sort_order: number }[];
   sizes: { id: number; size_label: string; price_add: number; is_available: boolean; gtin: string; stock_qty: number }[];
   barcode_url: string;

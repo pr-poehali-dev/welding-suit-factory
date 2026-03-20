@@ -317,27 +317,27 @@ export default function ManagerProductForm({
                   <span className="text-sm font-bold uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.05em" }}>Габариты и вес (справочно)</span>
                 </div>
                 <div className="text-xs mb-3" style={{ color: "#8a9ab5" }}>Данные для расчёта стоимости доставки. Не отображаются в каталоге.</div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <div>
-                    <div style={lbl} className="mb-1">Длина упаковки, см</div>
-                    <input className={inp} style={inpSt} placeholder="60" readOnly value="" />
+                    <div style={lbl} className="mb-1">Длина, см</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpSt} placeholder="60"
+                      value={form.pack_length || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, pack_length: v === "" ? 0 : parseFloat(v) })); }} />
                   </div>
                   <div>
-                    <div style={lbl} className="mb-1">Ширина упаковки, см</div>
-                    <input className={inp} style={inpSt} placeholder="40" readOnly value="" />
+                    <div style={lbl} className="mb-1">Ширина, см</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpSt} placeholder="40"
+                      value={form.pack_width || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, pack_width: v === "" ? 0 : parseFloat(v) })); }} />
                   </div>
                   <div>
-                    <div style={lbl} className="mb-1">Высота упаковки, см</div>
-                    <input className={inp} style={inpSt} placeholder="15" readOnly value="" />
+                    <div style={lbl} className="mb-1">Высота, см</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpSt} placeholder="15"
+                      value={form.pack_height || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, pack_height: v === "" ? 0 : parseFloat(v) })); }} />
                   </div>
                   <div>
-                    <div style={lbl} className="mb-1">Вес единицы, кг</div>
-                    <input className={inp} style={inpSt} placeholder="1.8" readOnly value="" />
+                    <div style={lbl} className="mb-1">Вес, кг</div>
+                    <input type="text" inputMode="decimal" className={inp} style={inpSt} placeholder="1.8"
+                      value={form.unit_weight || ""} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ""); setForm(f => ({ ...f, unit_weight: v === "" ? 0 : parseFloat(v) })); }} />
                   </div>
-                </div>
-                <div className="mt-3 p-3 rounded text-xs" style={{ background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.15)", color: "#c8bca8" }}>
-                  <Icon name="Info" size={12} style={{ color: "#f57c00", display: "inline", verticalAlign: "middle", marginRight: 4 }} />
-                  Габариты и вес заполняются в разделе <strong style={{ color: "#f57c00" }}>Админка</strong> при добавлении этих полей в базу. Используйте калькуляторы ТК ниже для предварительного расчёта.
                 </div>
               </div>
 
