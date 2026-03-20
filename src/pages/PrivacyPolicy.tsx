@@ -8,7 +8,7 @@ export default function PrivacyPolicy() {
     {
       title: "1. Общие положения",
       content: [
-        "Настоящая Политика конфиденциальности (далее — Политика) определяет порядок обработки персональных данных и меры по обеспечению безопасности персональных данных, предпринимаемые ООО «СПЕЦНАЗ ФАБРИКА» (далее — Оператор), владельцем сайта спецназфабрика.рф.",
+        "Настоящая Политика конфиденциальности (далее — Политика) определяет порядок обработки персональных данных и меры по обеспечению безопасности персональных данных, предпринимаемые ООО «СПЕЦНАЗ» (далее — Оператор), владельцем сайта спецназфабрика.рф.",
         "Оператор обрабатывает персональные данные в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ «О персональных данных» и иными применимыми нормативными правовыми актами Российской Федерации.",
         "Использование сайта спецназфабрика.рф означает безоговорочное согласие пользователя с настоящей Политикой и указанными в ней условиями обработки его персональных данных.",
       ],
@@ -16,10 +16,10 @@ export default function PrivacyPolicy() {
     {
       title: "2. Оператор персональных данных",
       content: [
-        "Наименование: ООО «СПЕЦНАЗ ФАБРИКА»",
+        "Наименование: ООО «СПЕЦНАЗ»",
         "Сайт: спецназфабрика.рф",
-        "Электронная почта: info@спецназфабрика.рф",
-        "Телефон: +7 (495) 000-00-00",
+        "Электронная почта: s9308852555@yandex.ru",
+        "Телефон: 8-930-885-25-55",
         "Оператор принимает все необходимые меры для защиты персональных данных пользователей от несанкционированного доступа, изменения, раскрытия или уничтожения.",
       ],
     },
@@ -101,28 +101,63 @@ export default function PrivacyPolicy() {
         "Настоящая Политика вступает в силу с момента её опубликования на сайте спецназфабрика.рф.",
         "Оператор вправе вносить изменения в настоящую Политику без уведомления пользователей. Новая редакция Политики вступает в силу с момента её размещения на сайте.",
         "Продолжение использования сайта после внесения изменений означает согласие пользователя с новой редакцией Политики.",
-        "По всем вопросам, связанным с обработкой персональных данных, обращайтесь: info@спецназфабрика.рф",
+        "По всем вопросам, связанным с обработкой персональных данных, обращайтесь: s9308852555@yandex.ru",
       ],
     },
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", color: text, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0d1117",
+        color: text,
+        fontFamily: "'IBM Plex Sans', sans-serif",
+      }}
+    >
       {/* Шапка */}
-      <div style={{ background: "#080c11", borderBottom: "1px solid rgba(245,124,0,0.2)" }}>
+      <div
+        style={{
+          background: "#080c11",
+          borderBottom: "1px solid rgba(245,124,0,0.2)",
+        }}
+      >
         <div className="max-w-4xl mx-auto px-4 md:px-8 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 flex items-center justify-center" style={{ background: accent }}>
-              <span style={{ color: "#0d1117", fontWeight: 900, fontSize: 12, fontFamily: oswald }}>С</span>
+            <div
+              className="w-7 h-7 flex items-center justify-center"
+              style={{ background: accent }}
+            >
+              <span
+                style={{
+                  color: "#0d1117",
+                  fontWeight: 900,
+                  fontSize: 12,
+                  fontFamily: oswald,
+                }}
+              >
+                С
+              </span>
             </div>
-            <a href="/" className="font-bold tracking-widest uppercase text-sm" style={{ fontFamily: oswald, color: accent, textDecoration: "none" }}>
+            <a
+              href="/"
+              className="font-bold tracking-widest uppercase text-sm"
+              style={{
+                fontFamily: oswald,
+                color: accent,
+                textDecoration: "none",
+              }}
+            >
               СПЕЦНАЗ ФАБРИКА
             </a>
           </div>
-          <a href="/" className="text-sm flex items-center gap-1 transition-colors" style={{ color: muted, textDecoration: "none" }}
-            onMouseEnter={e => (e.currentTarget.style.color = accent)}
-            onMouseLeave={e => (e.currentTarget.style.color = muted)}>
+          <a
+            href="/"
+            className="text-sm flex items-center gap-1 transition-colors"
+            style={{ color: muted, textDecoration: "none" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = accent)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = muted)}
+          >
             ← На главную
           </a>
         </div>
@@ -130,14 +165,21 @@ export default function PrivacyPolicy() {
 
       {/* Контент */}
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-16">
-
         {/* Заголовок */}
         <div className="mb-12">
           <div className="flex items-center gap-3 mb-4">
             <div style={{ width: 32, height: 2, background: accent }} />
-            <span className="text-sm tracking-widest uppercase" style={{ color: accent }}>Правовые документы</span>
+            <span
+              className="text-sm tracking-widest uppercase"
+              style={{ color: accent }}
+            >
+              Правовые документы
+            </span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: oswald, color: "#ffffff" }}>
+          <h1
+            className="text-4xl md:text-5xl font-bold mb-4"
+            style={{ fontFamily: oswald, color: "#ffffff" }}
+          >
             ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ
           </h1>
           <p style={{ color: muted }}>
@@ -146,24 +188,55 @@ export default function PrivacyPolicy() {
         </div>
 
         {/* Вводный блок */}
-        <div className="p-6 rounded-lg mb-10" style={{ background: "rgba(245,124,0,0.06)", border: "1px solid rgba(245,124,0,0.25)" }}>
+        <div
+          className="p-6 rounded-lg mb-10"
+          style={{
+            background: "rgba(245,124,0,0.06)",
+            border: "1px solid rgba(245,124,0,0.25)",
+          }}
+        >
           <p className="text-sm leading-relaxed" style={{ color: text }}>
-            Настоящий документ определяет политику ООО «СПЕЦНАЗ ФАБРИКА» в отношении обработки персональных данных пользователей сайта <strong style={{ color: accent }}>спецназфабрика.рф</strong> и содержит сведения о реализуемых требованиях к защите персональных данных в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ «О персональных данных».
+            Настоящий документ определяет политику ООО «СПЕЦНАЗ ФАБРИКА» в
+            отношении обработки персональных данных пользователей сайта{" "}
+            <strong style={{ color: accent }}>спецназфабрика.рф</strong> и
+            содержит сведения о реализуемых требованиях к защите персональных
+            данных в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ
+            «О персональных данных».
           </p>
         </div>
 
         {/* Разделы */}
         <div className="space-y-8">
           {sections.map((sec) => (
-            <div key={sec.title} className="rounded-lg overflow-hidden" style={{ border: "1px solid rgba(245,124,0,0.12)" }}>
-              <div className="px-6 py-4" style={{ background: "#13181f", borderBottom: "1px solid rgba(245,124,0,0.12)" }}>
-                <h2 className="font-bold text-base uppercase tracking-wide" style={{ fontFamily: oswald, color: "#ffffff" }}>
+            <div
+              key={sec.title}
+              className="rounded-lg overflow-hidden"
+              style={{ border: "1px solid rgba(245,124,0,0.12)" }}
+            >
+              <div
+                className="px-6 py-4"
+                style={{
+                  background: "#13181f",
+                  borderBottom: "1px solid rgba(245,124,0,0.12)",
+                }}
+              >
+                <h2
+                  className="font-bold text-base uppercase tracking-wide"
+                  style={{ fontFamily: oswald, color: "#ffffff" }}
+                >
                   {sec.title}
                 </h2>
               </div>
-              <div className="px-6 py-5 space-y-2" style={{ background: "#0d1117" }}>
+              <div
+                className="px-6 py-5 space-y-2"
+                style={{ background: "#0d1117" }}
+              >
                 {sec.content.map((para, i) => (
-                  <p key={i} className="text-sm leading-relaxed" style={{ color: para.startsWith("—") ? muted : text }}>
+                  <p
+                    key={i}
+                    className="text-sm leading-relaxed"
+                    style={{ color: para.startsWith("—") ? muted : text }}
+                  >
                     {para}
                   </p>
                 ))}
@@ -173,14 +246,32 @@ export default function PrivacyPolicy() {
         </div>
 
         {/* Подпись */}
-        <div className="mt-12 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-          style={{ borderTop: "1px solid rgba(245,124,0,0.15)" }}>
+        <div
+          className="mt-12 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+          style={{ borderTop: "1px solid rgba(245,124,0,0.15)" }}
+        >
           <div>
-            <div className="font-bold" style={{ fontFamily: oswald, color: "#ffffff" }}>ООО «СПЕЦНАЗ ФАБРИКА»</div>
-            <div className="text-sm mt-1" style={{ color: muted }}>Официальный сайт: спецназфабрика.рф</div>
+            <div
+              className="font-bold"
+              style={{ fontFamily: oswald, color: "#ffffff" }}
+            >
+              ООО «СПЕЦНАЗ ФАБРИКА»
+            </div>
+            <div className="text-sm mt-1" style={{ color: muted }}>
+              Официальный сайт: спецназфабрика.рф
+            </div>
           </div>
-          <a href="/" className="px-6 py-3 rounded text-sm font-medium"
-            style={{ background: "#f57c00", color: "#0d1117", fontFamily: oswald, textDecoration: "none", letterSpacing: "0.05em" }}>
+          <a
+            href="/"
+            className="px-6 py-3 rounded text-sm font-medium"
+            style={{
+              background: "#f57c00",
+              color: "#0d1117",
+              fontFamily: oswald,
+              textDecoration: "none",
+              letterSpacing: "0.05em",
+            }}
+          >
             ВЕРНУТЬСЯ НА САЙТ
           </a>
         </div>
