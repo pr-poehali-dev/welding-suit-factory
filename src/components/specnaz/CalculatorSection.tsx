@@ -119,7 +119,7 @@ export default function CalculatorSection({
           subtotal,
           volumeDiscount,
           total: totalPrice,
-          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPrice: r.unitPrice, lineTotal: r.lineTotal })),
+          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPrice: r.finalUnit, lineTotal: r.finalLine })),
         }),
       });
       setSent(true);
@@ -129,14 +129,21 @@ export default function CalculatorSection({
     setSending(false);
   };
 
-  const cartRows = cart.map((item) => {
+  const rawRows = cart.map((item) => {
     const unitPrice = calcItemPrice(item.product, item.size, payment, withLogo, basePrices, productSizes);
     return { ...item, unitPrice, lineTotal: unitPrice * item.qty };
   });
-  const subtotal = cartRows.reduce((s, r) => s + r.lineTotal, 0);
+  const subtotal = rawRows.reduce((s, r) => s + r.lineTotal, 0);
   const totalQty = cart.reduce((s, r) => s + r.qty, 0);
   const volumeDiscount = getVolumeDiscount(subtotal);
-  const totalPrice = Math.round(subtotal * (1 - volumeDiscount));
+  const discountAmount = Math.round(subtotal * volumeDiscount);
+  const totalPrice = subtotal - discountAmount;
+  const cartRows = rawRows.map(r => {
+    const finalUnit = Math.round(r.unitPrice * (1 - volumeDiscount));
+    const finalLine = finalUnit * r.qty;
+    const lineSaving = r.lineTotal - finalLine;
+    return { ...r, finalUnit, finalLine, lineSaving };
+  });
 
   return (
     <>
@@ -276,8 +283,11 @@ export default function CalculatorSection({
                       {/* Артикул */}
                       <div className="col-span-12 md:col-span-4">
                         <div className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{item.product}</div>
-                        <div className="text-xs mt-0.5" style={{ color: "#f57c00" }}>
-                          {item.unitPrice.toLocaleString("ru-RU")} ₽/шт
+                        <div className="text-xs mt-0.5 flex items-center gap-2">
+                          <span style={{ color: "#f57c00" }}>{item.finalUnit.toLocaleString("ru-RU")} ₽/шт</span>
+                          {volumeDiscount > 0 && (
+                            <span style={{ color: "#8a9ab5", textDecoration: "line-through", fontSize: 10 }}>{item.unitPrice.toLocaleString("ru-RU")}</span>
+                          )}
                         </div>
                       </div>
 
@@ -315,8 +325,11 @@ export default function CalculatorSection({
                       {/* Сумма */}
                       <div className="col-span-2 md:col-span-2 text-right">
                         <div className="text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>
-                          {item.lineTotal.toLocaleString("ru-RU")} ₽
+                          {item.finalLine.toLocaleString("ru-RU")} ₽
                         </div>
+                        {item.lineSaving > 0 && (
+                          <div className="text-xs" style={{ color: "#4ade80" }}>−{item.lineSaving.toLocaleString("ru-RU")} ₽</div>
+                        )}
                       </div>
 
                       {/* Удалить */}
@@ -362,16 +375,22 @@ export default function CalculatorSection({
               </div>
 
               <div className="space-y-0 mb-4">
-                {[
-                  { label: "Позиций в заказе", val: `${cart.length} арт., ${totalQty} шт` },
-                  { label: "Сумма без скидки", val: `${subtotal.toLocaleString("ru-RU")} ₽` },
-                  volumeDiscount > 0 ? { label: "Скидка с суммы", val: `−${(volumeDiscount * 100).toFixed(0)}%`, green: true } : null,
-                ].filter(Boolean).map((row) => (
-                  <div key={row!.label} className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                    <span className="text-sm" style={{ color: "#8a9ab5" }}>{row!.label}</span>
-                    <span className="text-sm font-medium" style={{ color: (row as { green?: boolean }).green ? "#4ade80" : "#e8e0d0" }}>{row!.val}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <span className="text-sm" style={{ color: "#8a9ab5" }}>Позиций в заказе</span>
+                  <span className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{cart.length} арт., {totalQty} шт</span>
+                </div>
+                <div className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <span className="text-sm" style={{ color: "#8a9ab5" }}>Сумма без скидки</span>
+                  <span className="text-sm font-medium" style={{ color: "#e8e0d0" }}>{subtotal.toLocaleString("ru-RU")} ₽</span>
+                </div>
+                {volumeDiscount > 0 && (
+                  <>
+                    <div className="flex justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <span className="text-sm" style={{ color: "#4ade80" }}>Скидка за объём ({(volumeDiscount * 100).toFixed(0)}%)</span>
+                      <span className="text-sm font-bold" style={{ color: "#4ade80" }}>−{discountAmount.toLocaleString("ru-RU")} ₽</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex items-end justify-between pt-3" style={{ borderTop: "2px solid rgba(245,124,0,0.3)" }}>
