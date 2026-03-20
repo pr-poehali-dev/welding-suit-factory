@@ -87,27 +87,28 @@ def build_contact_excel(org, contact, phone, email, message):
     return buf.getvalue()
 
 
-def build_order_excel(org, contact, phone, email, payment, total, items):
+def build_order_excel(org, contact, phone, email, payment, with_logo, subtotal, volume_discount, total, items):
     wb = Workbook()
     ws = wb.active
     ws.title = "Заказ"
 
     ws.column_dimensions["A"].width = 38
     ws.column_dimensions["B"].width = 22
-    ws.column_dimensions["C"].width = 12
-    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 16
+    ws.column_dimensions["E"].width = 18
 
-    ws.merge_cells("A1:D1")
+    ws.merge_cells("A1:E1")
     cell = ws["A1"]
     cell.value = "СПЕЦНАЗ ФАБРИКА — Заказ из калькулятора"
     cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=14)
     cell.fill = HEADER_FILL
     cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 36
-    for c in ["B1", "C1", "D1"]:
+    for c in ["B1", "C1", "D1", "E1"]:
         ws[c].fill = HEADER_FILL
 
-    ws.merge_cells("A2:D2")
+    ws.merge_cells("A2:E2")
     ws["A2"].value = f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
     ws["A2"].font = Font(name="Arial", color="999999", size=9)
     ws["A2"].alignment = Alignment(horizontal="right")
@@ -117,18 +118,42 @@ def build_order_excel(org, contact, phone, email, payment, total, items):
         ("Контактное лицо", contact),
         ("Телефон", phone),
         ("E-mail", email or "—"),
-        ("Условие оплаты", payment),
     ]
     for i, (label, value) in enumerate(info, start=4):
         ws.cell(row=i, column=1, value=label).font = LABEL_FONT
         ws.cell(row=i, column=1).border = THIN_BORDER
-        ws.merge_cells(start_row=i, start_column=2, end_row=i, end_column=4)
+        ws.merge_cells(start_row=i, start_column=2, end_row=i, end_column=5)
         v = ws.cell(row=i, column=2, value=value)
         v.font = VALUE_FONT
         v.border = THIN_BORDER
 
-    row = len(info) + 5
-    headers = ["Артикул", "Размер", "Кол-во", "Сумма, ₽"]
+    cond_row = len(info) + 5
+    ws.merge_cells(start_row=cond_row, start_column=1, end_row=cond_row, end_column=5)
+    ch = ws.cell(row=cond_row, column=1, value="УСЛОВИЯ ФОРМИРОВАНИЯ ЦЕНЫ")
+    ch.font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+    ch.fill = PatternFill(start_color="555555", end_color="555555", fill_type="solid")
+    ch.alignment = Alignment(horizontal="center")
+    for c2 in range(2, 6):
+        ws.cell(row=cond_row, column=c2).fill = PatternFill(start_color="555555", end_color="555555", fill_type="solid")
+    cond_row += 1
+
+    conditions = [
+        ("Условие оплаты", payment),
+        ("Нанесение логотипа", "Да (+15%)" if with_logo else "Нет"),
+    ]
+    if volume_discount > 0:
+        conditions.append(("Скидка за объём", f"{round(volume_discount * 100)}%"))
+    for label, value in conditions:
+        ws.cell(row=cond_row, column=1, value=label).font = LABEL_FONT
+        ws.cell(row=cond_row, column=1).border = THIN_BORDER
+        ws.merge_cells(start_row=cond_row, start_column=2, end_row=cond_row, end_column=5)
+        v = ws.cell(row=cond_row, column=2, value=value)
+        v.font = VALUE_FONT
+        v.border = THIN_BORDER
+        cond_row += 1
+
+    row = cond_row + 1
+    headers = ["Артикул", "Размер", "Кол-во", "Цена/шт, ₽", "Сумма, ₽"]
     for col, h in enumerate(headers, 1):
         c = ws.cell(row=row, column=col, value=h)
         c.font = HEADER_FONT
@@ -142,18 +167,41 @@ def build_order_excel(org, contact, phone, email, payment, total, items):
         ws.cell(row=row, column=2).alignment = Alignment(horizontal="center")
         ws.cell(row=row, column=3, value=item.get("qty", 0)).font = Font(name="Arial", size=10)
         ws.cell(row=row, column=3).alignment = Alignment(horizontal="center")
-        ws.cell(row=row, column=4, value=item.get("lineTotal", 0)).font = Font(name="Arial", bold=True, size=10)
-        ws.cell(row=row, column=4).alignment = Alignment(horizontal="right")
-        ws.cell(row=row, column=4).number_format = '#,##0'
-        for col in range(1, 5):
+        up = ws.cell(row=row, column=4, value=item.get("unitPrice", 0))
+        up.font = Font(name="Arial", size=10)
+        up.alignment = Alignment(horizontal="right")
+        up.number_format = '#,##0'
+        lt = ws.cell(row=row, column=5, value=item.get("lineTotal", 0))
+        lt.font = Font(name="Arial", bold=True, size=10)
+        lt.alignment = Alignment(horizontal="right")
+        lt.number_format = '#,##0'
+        for col in range(1, 6):
             ws.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
     row += 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
-    ws.cell(row=row, column=1, value="ИТОГО:").font = Font(name="Arial", bold=True, size=13)
+    if subtotal != total:
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+        ws.cell(row=row, column=1, value="Подытог (до скидки):").font = Font(name="Arial", size=11, color="666666")
+        ws.cell(row=row, column=1).alignment = Alignment(horizontal="right")
+        st = ws.cell(row=row, column=5, value=subtotal)
+        st.font = Font(name="Arial", size=11, color="666666")
+        st.alignment = Alignment(horizontal="right")
+        st.number_format = '#,##0'
+        row += 1
+        if volume_discount > 0:
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+            ws.cell(row=row, column=1, value=f"Скидка за объём ({round(volume_discount * 100)}%):").font = Font(name="Arial", size=11, color="4CAF50")
+            ws.cell(row=row, column=1).alignment = Alignment(horizontal="right")
+            dc = ws.cell(row=row, column=5, value=f"-{subtotal - total:,}")
+            dc.font = Font(name="Arial", size=11, color="4CAF50")
+            dc.alignment = Alignment(horizontal="right")
+            row += 1
+
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+    ws.cell(row=row, column=1, value="ИТОГО К ОПЛАТЕ:").font = Font(name="Arial", bold=True, size=13)
     ws.cell(row=row, column=1).alignment = Alignment(horizontal="right")
-    t = ws.cell(row=row, column=4, value=total)
+    t = ws.cell(row=row, column=5, value=total)
     t.font = Font(name="Arial", bold=True, size=13, color=ORANGE)
     t.alignment = Alignment(horizontal="right")
     t.number_format = '#,##0'
@@ -258,12 +306,18 @@ def handler(event: dict, context) -> dict:
         send_email("Новая заявка на КП — спецназфабрика.рф", html, excel, f"Заявка_КП_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx")
 
     elif kind == "order":
-        payment = body.get("payment", "—")
-        total   = body.get("total", 0)
-        items   = body.get("items", [])
+        payment         = body.get("payment", "—")
+        with_logo       = body.get("withLogo", False)
+        subtotal        = body.get("subtotal", 0)
+        volume_discount = body.get("volumeDiscount", 0)
+        total           = body.get("total", 0)
+        items           = body.get("items", [])
         save_lead(org, contact, phone, email, "", "order", json.dumps(items, ensure_ascii=False), total)
 
-        excel = build_order_excel(org, contact, phone, email, payment, total, items)
+        excel = build_order_excel(org, contact, phone, email, payment, with_logo, subtotal, volume_discount, total, items)
+
+        logo_label = "Да (+15%)" if with_logo else "Нет"
+        discount_pct = round(volume_discount * 100) if volume_discount else 0
 
         rows = ""
         for item in items:
@@ -272,8 +326,21 @@ def handler(event: dict, context) -> dict:
         <td style="padding:8px;border-bottom:1px solid #eee;color:#222">{item.get('product','')}</td>
         <td style="padding:8px;border-bottom:1px solid #eee;color:#666;text-align:center">{item.get('size','')}</td>
         <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">{item.get('qty','')}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">{item.get('unitPrice',0):,} ₽</td>
         <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:bold">{item.get('lineTotal',0):,} ₽</td>
       </tr>"""
+
+        subtotal_row = ""
+        if subtotal != total:
+            subtotal_row = f"""
+    <div style="text-align:right;margin-top:12px;padding:8px 12px">
+      <span style="color:#666;font-size:13px">Подытог: {subtotal:,} ₽</span>
+    </div>"""
+            if discount_pct > 0:
+                subtotal_row += f"""
+    <div style="text-align:right;padding:4px 12px">
+      <span style="color:#4CAF50;font-size:13px">Скидка за объём ({discount_pct}%): −{subtotal - total:,} ₽</span>
+    </div>"""
 
         html = f"""
 <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
@@ -281,13 +348,20 @@ def handler(event: dict, context) -> dict:
     <h1 style="color:#fff;margin:0;font-size:20px;letter-spacing:2px">СПЕЦНАЗ ФАБРИКА — заявка из калькулятора</h1>
   </div>
   <div style="background:#f9f9f9;padding:24px;border:1px solid #eee">
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
       <tr><td style="padding:6px 0;color:#666;width:180px">Организация</td><td style="padding:6px 0;font-weight:bold;color:#222">{org}</td></tr>
       <tr><td style="padding:6px 0;color:#666">Контактное лицо</td><td style="padding:6px 0;font-weight:bold;color:#222">{contact}</td></tr>
       <tr><td style="padding:6px 0;color:#666">Телефон</td><td style="padding:6px 0;font-weight:bold;color:#f57c00;font-size:16px">{phone}</td></tr>
       <tr><td style="padding:6px 0;color:#666">E-mail</td><td style="padding:6px 0;color:#222">{email or '—'}</td></tr>
-      <tr><td style="padding:6px 0;color:#666">Условие оплаты</td><td style="padding:6px 0;color:#222">{payment}</td></tr>
     </table>
+    <div style="background:#fff3e0;padding:12px 16px;border-radius:4px;margin-bottom:16px;border:1px solid #ffe0b2">
+      <div style="font-size:12px;font-weight:bold;color:#e65100;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Условия формирования цены</div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="padding:3px 0;color:#666;font-size:13px;width:180px">Условие оплаты</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{payment}</td></tr>
+        <tr><td style="padding:3px 0;color:#666;font-size:13px">Нанесение логотипа</td><td style="padding:3px 0;color:#222;font-size:13px;font-weight:bold">{logo_label}</td></tr>
+        {"<tr><td style='padding:3px 0;color:#666;font-size:13px'>Скидка за объём</td><td style='padding:3px 0;color:#4CAF50;font-size:13px;font-weight:bold'>" + str(discount_pct) + "%</td></tr>" if discount_pct > 0 else ""}
+      </table>
+    </div>
     <h3 style="color:#333;border-bottom:2px solid #f57c00;padding-bottom:8px;margin-bottom:0">Состав заказа</h3>
     <table style="width:100%;border-collapse:collapse">
       <thead>
@@ -295,12 +369,13 @@ def handler(event: dict, context) -> dict:
           <th style="padding:8px;color:#fff;text-align:left">Артикул</th>
           <th style="padding:8px;color:#fff;text-align:center">Размер</th>
           <th style="padding:8px;color:#fff;text-align:center">Кол-во</th>
+          <th style="padding:8px;color:#fff;text-align:right">Цена/шт</th>
           <th style="padding:8px;color:#fff;text-align:right">Сумма</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
-    </table>
-    <div style="text-align:right;margin-top:16px;padding:12px;background:#fff3e0;border-radius:4px">
+    </table>{subtotal_row}
+    <div style="text-align:right;margin-top:8px;padding:12px;background:#fff3e0;border-radius:4px">
       <span style="color:#666;font-size:14px">ИТОГО К ОПЛАТЕ: </span>
       <span style="color:#f57c00;font-size:22px;font-weight:bold">{total:,} ₽</span>
     </div>

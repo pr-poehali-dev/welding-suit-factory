@@ -115,8 +115,11 @@ export default function CalculatorSection({
           phone: mPhone,
           email: mEmail,
           payment: payLabel,
+          withLogo,
+          subtotal,
+          volumeDiscount,
           total: totalPrice,
-          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, lineTotal: r.lineTotal })),
+          items: cartRows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPrice: r.unitPrice, lineTotal: r.lineTotal })),
         }),
       });
       setSent(true);
