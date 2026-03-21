@@ -46,13 +46,18 @@ export default function AdminPayments() {
 
   const save = async () => {
     setSaving(true);
-    await authFetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_payment_options", items: options.map(o => ({ id: o.id, label: o.label, description: o.desc, coeff: o.coeff, sort_order: o.sort_order })) }),
-    });
-    setSaving(false);
-    notify("Коэффициенты сохранены");
+    try {
+      await authFetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save_payment_options", items: options.map(o => ({ id: o.id, label: o.label, description: o.desc, coeff: o.coeff, sort_order: o.sort_order })) }),
+      });
+      notify("Коэффициенты сохранены");
+    } catch {
+      notify("Ошибка сохранения", false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const grouped = Object.keys(GROUPS).map(gid => ({

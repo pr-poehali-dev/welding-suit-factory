@@ -47,13 +47,18 @@ export default function AdminSeo() {
 
   const save = async () => {
     setSaving(true);
-    await authFetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_seo", seo }),
-    });
-    setSaving(false);
-    notify("SEO-настройки сохранены");
+    try {
+      await authFetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save_seo", seo }),
+      });
+      notify("SEO-настройки сохранены");
+    } catch {
+      notify("Ошибка сохранения", false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const field = (key: keyof SeoData, label: string, hint?: string, rows?: number) => (

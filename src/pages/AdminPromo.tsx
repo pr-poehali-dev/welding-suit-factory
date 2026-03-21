@@ -40,10 +40,15 @@ export default function AdminPromo() {
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch(PROMO_API);
-    const data = await res.json();
-    setLeads(data.leads || []);
-    setLoading(false);
+    try {
+      const res = await fetch(PROMO_API);
+      const data = await res.json();
+      setLeads(data.leads || []);
+    } catch {
+      notify("Ошибка загрузки контактов", false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -75,18 +80,23 @@ export default function AdminPromo() {
   const handleImport = async () => {
     if (!pendingFile) return;
     setImporting(true);
-    const res = await authFetch(`${PROMO_API}/import`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ file: pendingFile.b64, filename: pendingFile.filename }),
-    });
-    const data = await res.json();
-    setImportResult({ added: data.added, skipped: data.skipped });
-    setImporting(false);
-    notify(`Импортировано ${data.added} контактов`);
-    setPendingFile(null);
-    setPreview(null);
-    load();
+    try {
+      const res = await authFetch(`${PROMO_API}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: pendingFile.b64, filename: pendingFile.filename }),
+      });
+      const data = await res.json();
+      setImportResult({ added: data.added, skipped: data.skipped });
+      notify(`Импортировано ${data.added} контактов`);
+      setPendingFile(null);
+      setPreview(null);
+      load();
+    } catch {
+      notify("Ошибка импорта. Попробуйте ещё раз.", false);
+    } finally {
+      setImporting(false);
+    }
   };
 
   const unsubscribe = async (id: number) => {
@@ -108,15 +118,20 @@ export default function AdminPromo() {
     if (!confirm(`Отправить письмо ${withEmail.length} клиентам?`)) return;
     setSending(true);
     setResult(null);
-    const res = await authFetch(`${PROMO_API}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject, text }),
-    });
-    const data = await res.json();
-    setResult({ sent: data.sent, skipped: data.skipped });
-    setSending(false);
-    notify(`Отправлено ${data.sent} писем`);
+    try {
+      const res = await authFetch(`${PROMO_API}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, text }),
+      });
+      const data = await res.json();
+      setResult({ sent: data.sent, skipped: data.skipped });
+      notify(`Отправлено ${data.sent} писем`);
+    } catch {
+      notify("Ошибка отправки рассылки", false);
+    } finally {
+      setSending(false);
+    }
   };
 
   const withEmail = leads.filter(l => l.email && !l.is_unsubscribed).length;
