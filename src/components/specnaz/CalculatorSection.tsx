@@ -24,6 +24,7 @@ export interface ProductSizeData {
   price_add: number;
   is_available: boolean;
   stock_qty?: number;
+  gtin?: string;
 }
 
 export function stockInfo(qty: number) {
@@ -205,7 +206,7 @@ export default function CalculatorSection({
             orderType: g.payOpt.availability,
             subtotal: g.subtotal,
             total: g.total,
-            items: g.rows.map(r => ({ product: r.product, size: r.size, qty: r.qty, unitPriceFull: r.unitPrice, unitPrice: r.finalUnit, lineTotal: r.finalLine, saving: r.lineSaving })),
+            items: g.rows.map(r => ({ product: r.product, gtin: (productSizes[r.product] || []).find(s => s.size_label === r.size)?.gtin || "", size: r.size, qty: r.qty, unitPriceFull: r.unitPrice, unitPrice: r.finalUnit, lineTotal: r.finalLine, saving: r.lineSaving })),
           })),
         }),
       });

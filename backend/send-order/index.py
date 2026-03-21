@@ -93,24 +93,25 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
     ws.title = "Заказ"
 
     ws.column_dimensions["A"].width = 34
-    ws.column_dimensions["B"].width = 20
-    ws.column_dimensions["C"].width = 10
-    ws.column_dimensions["D"].width = 14
+    ws.column_dimensions["B"].width = 18
+    ws.column_dimensions["C"].width = 20
+    ws.column_dimensions["D"].width = 10
     ws.column_dimensions["E"].width = 14
-    ws.column_dimensions["F"].width = 16
-    ws.column_dimensions["G"].width = 14
+    ws.column_dimensions["F"].width = 14
+    ws.column_dimensions["G"].width = 16
+    ws.column_dimensions["H"].width = 14
 
-    ws.merge_cells("A1:G1")
+    ws.merge_cells("A1:H1")
     cell = ws["A1"]
     cell.value = "СПЕЦНАЗ ФАБРИКА — Заказ из калькулятора"
     cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=14)
     cell.fill = HEADER_FILL
     cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 36
-    for c in ["B1", "C1", "D1", "E1", "F1", "G1"]:
+    for c in ["B1", "C1", "D1", "E1", "F1", "G1", "H1"]:
         ws[c].fill = HEADER_FILL
 
-    ws.merge_cells("A2:G2")
+    ws.merge_cells("A2:H2")
     ws["A2"].value = f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
     ws["A2"].font = Font(name="Arial", color="999999", size=9)
     ws["A2"].alignment = Alignment(horizontal="right")
@@ -124,7 +125,7 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
     for i, (label, value) in enumerate(info, start=4):
         ws.cell(row=i, column=1, value=label).font = LABEL_FONT
         ws.cell(row=i, column=1).border = THIN_BORDER
-        ws.merge_cells(start_row=i, start_column=2, end_row=i, end_column=7)
+        ws.merge_cells(start_row=i, start_column=2, end_row=i, end_column=8)
         v = ws.cell(row=i, column=2, value=value)
         v.font = VALUE_FONT
         v.border = THIN_BORDER
@@ -136,7 +137,7 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
     for label, value in conditions:
         ws.cell(row=row, column=1, value=label).font = LABEL_FONT
         ws.cell(row=row, column=1).border = THIN_BORDER
-        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=6)
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=7)
         v = ws.cell(row=row, column=2, value=value)
         v.font = VALUE_FONT
         v.border = THIN_BORDER
@@ -147,7 +148,7 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
     for g in groups:
         all_items.extend(g.get("items", []))
     has_savings = any(item.get("saving", 0) > 0 for item in all_items)
-    NCOLS = 7 if has_savings else 6
+    NCOLS = 8 if has_savings else 7
 
     for g in groups:
         g_payment = g.get("payment", "")
@@ -165,7 +166,7 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
             ws.cell(row=row, column=c2).fill = PatternFill(start_color="555555", end_color="555555", fill_type="solid")
         row += 1
 
-        headers = ["Артикул", "Размер", "Кол-во", "Цена без скидки", "Цена/шт", "Сумма, ₽"]
+        headers = ["Артикул", "GTIN", "Размер", "Кол-во", "Цена без скидки", "Цена/шт", "Сумма, ₽"]
         if has_savings:
             headers.append("Экономия, ₽")
         for col, h in enumerate(headers, 1):
@@ -178,24 +179,28 @@ def build_order_excel(org, contact, phone, email, with_logo, subtotal, volume_di
         for item in g_items:
             saving = item.get("saving", 0)
             ws.cell(row=row, column=1, value=item.get("product", "")).font = Font(name="Arial", size=10)
-            ws.cell(row=row, column=2, value=item.get("size", "")).font = Font(name="Arial", size=10)
-            ws.cell(row=row, column=2).alignment = Alignment(horizontal="center")
-            ws.cell(row=row, column=3, value=item.get("qty", 0)).font = Font(name="Arial", size=10)
+            gtin_val = item.get("gtin", "")
+            gc = ws.cell(row=row, column=2, value=gtin_val)
+            gc.font = Font(name="Arial", size=10)
+            gc.alignment = Alignment(horizontal="center")
+            ws.cell(row=row, column=3, value=item.get("size", "")).font = Font(name="Arial", size=10)
             ws.cell(row=row, column=3).alignment = Alignment(horizontal="center")
-            uf = ws.cell(row=row, column=4, value=item.get("unitPriceFull", 0))
+            ws.cell(row=row, column=4, value=item.get("qty", 0)).font = Font(name="Arial", size=10)
+            ws.cell(row=row, column=4).alignment = Alignment(horizontal="center")
+            uf = ws.cell(row=row, column=5, value=item.get("unitPriceFull", 0))
             uf.font = Font(name="Arial", size=10, color="999999")
             uf.alignment = Alignment(horizontal="right")
             uf.number_format = '#,##0'
-            up = ws.cell(row=row, column=5, value=item.get("unitPrice", 0))
+            up = ws.cell(row=row, column=6, value=item.get("unitPrice", 0))
             up.font = Font(name="Arial", bold=True, size=10)
             up.alignment = Alignment(horizontal="right")
             up.number_format = '#,##0'
-            lt = ws.cell(row=row, column=6, value=item.get("lineTotal", 0))
+            lt = ws.cell(row=row, column=7, value=item.get("lineTotal", 0))
             lt.font = Font(name="Arial", bold=True, size=10)
             lt.alignment = Alignment(horizontal="right")
             lt.number_format = '#,##0'
             if has_savings:
-                sv = ws.cell(row=row, column=7, value=f"-{saving:,}" if saving > 0 else "—")
+                sv = ws.cell(row=row, column=8, value=f"-{saving:,}" if saving > 0 else "—")
                 sv.font = Font(name="Arial", size=10, color="4CAF50" if saving > 0 else "999999")
                 sv.alignment = Alignment(horizontal="right")
             for col in range(1, NCOLS + 1):
@@ -295,7 +300,7 @@ def build_client_html(contact, with_logo, subtotal, volume_discount, total, grou
         cli_all_items.extend(gg.get("items", []))
     cli_has_savings = any(i.get("saving", 0) > 0 for i in cli_all_items)
     cli_total_saving = sum(i.get("saving", 0) for i in cli_all_items)
-    cli_ncols = 6 if cli_has_savings else 5
+    cli_ncols = 7 if cli_has_savings else 6
 
     groups_html = ""
     for g in groups:
@@ -312,6 +317,7 @@ def build_client_html(contact, with_logo, subtotal, volume_discount, total, grou
             rows += f"""
       <tr>
         <td {td}">{item.get('product','')}</td>
+        <td {td};text-align:center">{item.get('gtin','')}</td>
         <td {td};text-align:center">{item.get('size','')}</td>
         <td {td};text-align:center">{item.get('qty','')}</td>
         <td {td};text-align:right;font-weight:bold">{item.get('unitPrice',0):,}</td>
@@ -325,6 +331,7 @@ def build_client_html(contact, with_logo, subtotal, volume_discount, total, grou
       <tr><td colspan="{cli_ncols}" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
       <tr style="background:#f57c00">
         <th {td};color:#fff">Артикул</th>
+        <th {td};color:#fff;text-align:center">GTIN</th>
         <th {td};color:#fff;text-align:center">Размер</th>
         <th {td};color:#fff;text-align:center">Кол-во</th>
         <th {td};color:#fff;text-align:right">Цена/шт</th>
@@ -475,7 +482,7 @@ def handler(event: dict, context) -> dict:
         td = 'style="padding:5px 8px;border:1px solid #ddd;font-size:12px'
         mgr_has_savings = any(item.get("saving", 0) > 0 for item in all_items)
         mgr_total_saving = sum(item.get("saving", 0) for item in all_items)
-        ncols_html = 7 if mgr_has_savings else 6
+        ncols_html = 8 if mgr_has_savings else 7
 
         groups_html = ""
         for g in groups:
@@ -492,6 +499,7 @@ def handler(event: dict, context) -> dict:
                 rows += f"""
       <tr>
         <td {td}">{item.get('product','')}</td>
+        <td {td};text-align:center">{item.get('gtin','')}</td>
         <td {td};text-align:center">{item.get('size','')}</td>
         <td {td};text-align:center">{item.get('qty','')}</td>
         <td {td};text-align:right;color:#999">{item.get('unitPriceFull', item.get('unitPrice',0)):,}</td>
@@ -506,6 +514,7 @@ def handler(event: dict, context) -> dict:
       <tr><td colspan="{ncols_html}" style="background:#555;color:#fff;padding:6px 8px;font-size:12px;font-weight:bold;letter-spacing:1px">{pay_label}</td></tr>
       <tr style="background:#f57c00">
         <th {td};color:#fff">Артикул</th>
+        <th {td};color:#fff;text-align:center">GTIN</th>
         <th {td};color:#fff;text-align:center">Размер</th>
         <th {td};color:#fff;text-align:center">Кол-во</th>
         <th {td};color:#fff;text-align:right">Цена до скидки</th>
