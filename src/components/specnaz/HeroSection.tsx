@@ -10,7 +10,7 @@ export default function HeroSection({ scrollTo }: HeroSectionProps) {
       {/* HERO */}
       <section className="relative flex items-center min-h-screen pt-16" style={{ overflow: "hidden" }}>
         <div className="absolute inset-0">
-          <img src={HERO_IMAGE} alt="Сварщик" className="w-full h-full object-cover" style={{ opacity: 0.25 }} />
+          <img src={HERO_IMAGE} alt="Сварщик" className="w-full h-full object-cover" style={{ opacity: 0.35 }} />
           <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, #0d1117 40%, rgba(13,17,23,0.6) 100%)" }} />
           <div className="absolute inset-0" style={{
             backgroundImage: "linear-gradient(rgba(245,124,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(245,124,0,0.04) 1px, transparent 1px)",
