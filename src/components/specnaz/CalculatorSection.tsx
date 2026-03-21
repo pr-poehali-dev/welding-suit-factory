@@ -419,13 +419,13 @@ export default function CalculatorSection({
                   ))}
                 </div>
 
-                <div className="rounded overflow-hidden" style={{ background: "#fff" }}>
+                <div className="rounded overflow-hidden" style={{ background: "#13181f" }}>
                   <iframe
-                    src={`https://widgets.dellin.ru/calculator?group1=disabled&group11=disabled&derival_point=${shipCity === "Москва" ? "7700000000000000000000000" : "6200000100000000000000000"}&derival_to_door=off&arrival_to_door=on&disabled_calculation=on&links.creator=hide&links.services=hide&insurance=0&package=1`}
+                    src={`https://widgets.dellin.ru/calculator?group1=disabled&group11=disabled&derival_point=${shipCity === "Москва" ? "7700000000000000000000000" : "6200000100000000000000000"}&derival_to_door=off&arrival_to_door=on&disabled_calculation=on&links.creator=hide&links.services=hide&insurance=0&package=1&sized_weight=${Math.ceil(totalWeight)}&sized_volume=${totalVolume.toFixed(2)}`}
                     width="100%"
                     height="390"
                     scrolling="no"
-                    style={{ border: "none", display: "block" }}
+                    style={{ border: "none", display: "block", filter: "invert(0.88) hue-rotate(180deg)", colorScheme: "light" }}
                     title="Калькулятор Деловые Линии"
                   />
                 </div>
