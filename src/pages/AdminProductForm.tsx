@@ -41,12 +41,17 @@ export default function AdminProductForm({
     setUploading(true);
     const reader = new FileReader();
     reader.onload = async () => {
-      const b64 = (reader.result as string).split(",")[1];
-      const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
-      const data = await res.json();
-      setForm(f => ({ ...f, image_url: data.url }));
-      setUploading(false);
-      notify("Фото загружено");
+      try {
+        const b64 = (reader.result as string).split(",")[1];
+        const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
+        const data = await res.json();
+        setForm(f => ({ ...f, image_url: data.url }));
+        notify("Фото загружено");
+      } catch {
+        notify("Ошибка загрузки фото", false);
+      } finally {
+        setUploading(false);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -57,12 +62,17 @@ export default function AdminProductForm({
     setUploading(true);
     const reader = new FileReader();
     reader.onload = async () => {
-      const b64 = (reader.result as string).split(",")[1];
-      const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
-      const data = await res.json();
-      setFormImages(imgs => [...imgs, { url: data.url }]);
-      setUploading(false);
-      notify("Фото добавлено в галерею");
+      try {
+        const b64 = (reader.result as string).split(",")[1];
+        const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
+        const data = await res.json();
+        setFormImages(imgs => [...imgs, { url: data.url }]);
+        notify("Фото добавлено в галерею");
+      } catch {
+        notify("Ошибка загрузки фото", false);
+      } finally {
+        setUploading(false);
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = "";

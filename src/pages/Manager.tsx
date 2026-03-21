@@ -115,35 +115,40 @@ export default function Manager() {
   const save = async () => {
     if (!form.name.trim()) { notify("Введите название", false); return; }
     setSaving(true);
-    const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
-    let productId = editId;
-    if (editId !== null) {
-      await authFetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
-    } else {
-      const res = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
-      productId = (await res.json()).id;
+    try {
+      const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
+      let productId = editId;
+      if (editId !== null) {
+        await authFetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
+      } else {
+        const res = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
+        productId = (await res.json()).id;
+      }
+      if (productId) {
+        const currentRes  = await fetch(API);
+        const currentProd = ((await currentRes.json()).products || []).find((p: Product) => p.id === productId);
+        const currentImgs: ProductImage[] = currentProd?.images || [];
+        for (const ci of currentImgs) {
+          if (!formImages.find(fi => fi.url === ci.url))
+            await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
+        }
+        for (let i = 0; i < formImages.length; i++) {
+          if (!currentImgs.find(ci => ci.url === formImages[i].url))
+            await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
+        }
+        for (const s of formSizes) {
+          if (s.size_label.trim())
+            await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_size", ...s, product_id: productId }) });
+        }
+      }
+      setShowForm(false);
+      notify(editId !== null ? "Товар обновлён" : "Товар добавлен");
+      load();
+    } catch {
+      notify("Ошибка сохранения. Попробуйте ещё раз.", false);
+    } finally {
+      setSaving(false);
     }
-    if (productId) {
-      const currentRes  = await fetch(API);
-      const currentProd = ((await currentRes.json()).products || []).find((p: Product) => p.id === productId);
-      const currentImgs: ProductImage[] = currentProd?.images || [];
-      for (const ci of currentImgs) {
-        if (!formImages.find(fi => fi.url === ci.url))
-          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
-      }
-      for (let i = 0; i < formImages.length; i++) {
-        if (!currentImgs.find(ci => ci.url === formImages[i].url))
-          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
-      }
-      for (const s of formSizes) {
-        if (s.size_label.trim())
-          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_size", ...s, product_id: productId }) });
-      }
-    }
-    setSaving(false);
-    setShowForm(false);
-    notify(editId !== null ? "Товар обновлён" : "Товар добавлен");
-    load();
   };
 
   if (!authed) return (
@@ -251,7 +256,7 @@ export default function Manager() {
           uploading={uploading} setUploading={setUploading}
           saving={saving}
           onSave={save}
-          onClose={() => setShowForm(false)}
+          onClose={() => { setSaving(false); setUploading(false); setShowForm(false); }}
           notify={notify}
         />
       )}

@@ -62,52 +62,57 @@ export default function Admin() {
   const save = async () => {
     if (!form.name.trim()) { notify("Введите название товара", false); return; }
     setSaving(true);
-    const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
+    try {
+      const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
 
-    let productId = editId;
-    if (editId !== null) {
-      const res  = await authFetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
-      const data = await res.json();
-      if (data.barcode_url) notify("Штрихкод сгенерирован");
-    } else {
-      const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
-      const data = await res.json();
-      productId  = data.id;
-      if (data.barcode_url) notify("Штрихкод сгенерирован");
+      let productId = editId;
+      if (editId !== null) {
+        const res  = await authFetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
+        const data = await res.json();
+        if (data.barcode_url) notify("Штрихкод сгенерирован");
+      } else {
+        const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
+        const data = await res.json();
+        productId  = data.id;
+        if (data.barcode_url) notify("Штрихкод сгенерирован");
+      }
+
+      if (productId) {
+        const currentRes  = await fetch(`${API}?show_all=1`);
+        const currentData = await currentRes.json();
+        const currentProd = (currentData.products || []).find((p: Product) => p.id === productId);
+        const currentImgs: { id: number; url: string }[] = currentProd?.images || [];
+
+        for (const ci of currentImgs) {
+          if (!formImages.find(fi => fi.url === ci.url)) {
+            await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
+          }
+        }
+        for (let i = 0; i < formImages.length; i++) {
+          if (!currentImgs.find(ci => ci.url === formImages[i].url)) {
+            await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
+          }
+        }
+
+        for (const s of formSizes) {
+          if (s.size_label.trim()) {
+            const existingSize = currentProd?.sizes?.find((cs: ProductSize & { id: number }) => cs.id === (s as ProductSize & { id?: number }).id);
+            await authFetch(API, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "add_size", ...s, product_id: productId, id: existingSize ? (s as ProductSize & { id?: number }).id : undefined }),
+            });
+          }
+        }
+      }
+
+      setShowForm(false);
+      notify(editId !== null ? "Товар обновлён" : "Товар добавлен");
+      load();
+    } catch {
+      notify("Ошибка сохранения. Попробуйте ещё раз.", false);
+    } finally {
+      setSaving(false);
     }
-
-    if (productId) {
-      const currentRes  = await fetch(`${API}?show_all=1`);
-      const currentData = await currentRes.json();
-      const currentProd = (currentData.products || []).find((p: Product) => p.id === productId);
-      const currentImgs: { id: number; url: string }[] = currentProd?.images || [];
-
-      for (const ci of currentImgs) {
-        if (!formImages.find(fi => fi.url === ci.url)) {
-          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
-        }
-      }
-      for (let i = 0; i < formImages.length; i++) {
-        if (!currentImgs.find(ci => ci.url === formImages[i].url)) {
-          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
-        }
-      }
-
-      for (const s of formSizes) {
-        if (s.size_label.trim()) {
-          const existingSize = currentProd?.sizes?.find((cs: ProductSize & { id: number }) => cs.id === (s as ProductSize & { id?: number }).id);
-          await authFetch(API, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "add_size", ...s, product_id: productId, id: existingSize ? (s as ProductSize & { id?: number }).id : undefined }),
-          });
-        }
-      }
-    }
-
-    setSaving(false);
-    setShowForm(false);
-    notify(editId !== null ? "Товар обновлён" : "Товар добавлен");
-    load();
   };
 
   const remove = async (id: number, name: string) => {
@@ -165,7 +170,7 @@ export default function Admin() {
           setUploading={setUploading}
           saving={saving}
           onSave={save}
-          onClose={() => setShowForm(false)}
+          onClose={() => { setSaving(false); setUploading(false); setShowForm(false); }}
           notify={notify}
         />
       )}
