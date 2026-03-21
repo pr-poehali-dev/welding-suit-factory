@@ -44,5 +44,5 @@ export interface ProductDimensions {
 export const accent = "#f57c00";
 export const muted = "#8a9ab5";
 export const oswald = "'Oswald', sans-serif";
-export const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/files/ee74c877-16da-403c-9fd7-354b40097da6.jpg";
+export const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/bucket/0ac50821-6a36-406d-9654-0967b84c24c4.jpg";
 export const CHESTNIY_ZNAK_IMG = "https://cdn.poehali.dev/projects/c9ed5862-2c66-4e7a-985a-adae1a32a552/bucket/13d96f42-3da7-4dbe-bfcc-50c514929a23.png";
