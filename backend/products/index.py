@@ -169,13 +169,33 @@ def handler(event: dict, context) -> dict:
         action = body.get("action", "create")
 
         if action == "auth":
+            ip = (event.get("requestContext") or {}).get("identity", {}).get("sourceIp", "unknown")
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT COUNT(*) FROM {SCHEMA}.login_attempts WHERE ip=%s AND attempted_at > NOW() - INTERVAL '24 hours'",
+                (ip,)
+            )
+            attempts = cur.fetchone()[0]
+            if attempts >= 5:
+                conn.close()
+                return {"statusCode": 429, "headers": {**cors_headers(), "Content-Type": "application/json"},
+                        "body": json.dumps({"ok": False, "error": "too_many_attempts", "message": "Превышен лимит попыток. Попробуйте через 24 часа."})}
             role       = body.get("role", "admin")
             password   = body.get("password", "")
             secret_key = "ADMIN_PASSWORD" if role == "admin" else "MANAGER_PASSWORD"
             expected   = os.environ.get(secret_key, "")
             if password and password == expected:
+                cur.execute(f"DELETE FROM {SCHEMA}.login_attempts WHERE ip=%s", (ip,))
+                conn.commit()
+                conn.close()
                 return ok({"ok": True, "role": role})
-            return {"statusCode": 401, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps({"ok": False})}
+            cur.execute(f"INSERT INTO {SCHEMA}.login_attempts (ip) VALUES (%s)", (ip,))
+            conn.commit()
+            remaining = 4 - attempts
+            conn.close()
+            return {"statusCode": 401, "headers": {**cors_headers(), "Content-Type": "application/json"},
+                    "body": json.dumps({"ok": False, "remaining": remaining})}
 
         if not check_admin_or_manager(event.get("headers")):
             return deny()

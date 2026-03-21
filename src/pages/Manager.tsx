@@ -10,6 +10,7 @@ export default function Manager() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [blocked, setBlocked] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,6 +31,7 @@ export default function Manager() {
   };
 
   const handleAuth = async () => {
+    if (blocked) return;
     setAuthLoading(true);
     setAuthError("");
     try {
@@ -47,8 +49,15 @@ export default function Manager() {
         sessionStorage.setItem("manager_token", password);
         setAuthed(true);
         load();
+      } else if (data.error === "too_many_attempts") {
+        setAuthError(data.message);
+        setBlocked(true);
       } else {
-        setAuthError("Неверный пароль");
+        const msg = typeof data.remaining === "number"
+          ? `Неверный пароль. Осталось попыток: ${data.remaining}`
+          : "Неверный пароль";
+        setAuthError(msg);
+        if (data.remaining !== undefined && data.remaining <= 0) setBlocked(true);
       }
     } catch {
       setAuthError("Ошибка соединения. Попробуйте ещё раз.");

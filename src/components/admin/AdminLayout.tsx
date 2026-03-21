@@ -11,12 +11,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem("admin_token")) setAuthed(true);
   }, []);
 
   const handleAuth = async () => {
+    if (blocked) return;
     setAuthLoading(true);
     setAuthError("");
     try {
@@ -33,8 +35,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       if (data.ok) {
         sessionStorage.setItem("admin_token", password);
         setAuthed(true);
+      } else if (data.error === "too_many_attempts") {
+        setAuthError(data.message);
+        setBlocked(true);
       } else {
-        setAuthError("Неверный пароль");
+        const msg = typeof data.remaining === "number"
+          ? `Неверный пароль. Осталось попыток: ${data.remaining}`
+          : "Неверный пароль";
+        setAuthError(msg);
+        if (data.remaining !== undefined && data.remaining <= 0) setBlocked(true);
       }
     } catch {
       setAuthError("Ошибка соединения. Попробуйте ещё раз.");
