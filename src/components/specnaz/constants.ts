@@ -8,7 +8,6 @@ export const NAV_LINKS = [
   { label: "Калькулятор", href: "#calculator" },
   { label: "Услуги пошива", href: "#sewing" },
   { label: "Производство", href: "#production" },
-  { label: "Сертификаты", href: "#certificates" },
   { label: "Доставка", href: "#delivery" },
   { label: "Контакты", href: "#contacts" },
 ];

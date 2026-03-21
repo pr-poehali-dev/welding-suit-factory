@@ -15,11 +15,8 @@ export default function Header({ mobileMenuOpen, setMobileMenuOpen, scrollTo }: 
           <div className="w-8 h-8 flex items-center justify-center" style={{ background: "#f57c00" }}>
             <Icon name="Flame" size={18} style={{ color: "#0d1117" }} />
           </div>
-          <div>
-            <div className="font-bold text-lg leading-none" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>
-              СПЕЦНАЗ
-            </div>
-            <div className="text-xs" style={{ color: "#8a9ab5", letterSpacing: "0.05em" }}>Швейная фабрика</div>
+          <div className="font-bold text-lg leading-none" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>
+            СПЕЦНАЗ <span style={{ color: "#8a9ab5", fontWeight: 400, fontSize: "0.85em", letterSpacing: "0.05em" }}>Швейная фабрика</span>
           </div>
         </div>
 
@@ -37,10 +34,6 @@ export default function Header({ mobileMenuOpen, setMobileMenuOpen, scrollTo }: 
         </nav>
 
         <div className="hidden lg:flex items-center gap-3">
-          <a href="tel:+79308852555" className="flex items-center gap-2 text-sm font-medium" style={{ color: "#e8e0d0" }}>
-            <Icon name="Phone" size={14} />
-            8-930-885-25-55
-          </a>
           <button className="btn-primary px-4 py-2 text-sm" onClick={() => scrollTo("#contacts")}>
             Получить КП
           </button>
