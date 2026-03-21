@@ -419,8 +419,19 @@ export default function CalculatorSection({
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {SHIPPING_CALCS.map(tk => (
+                <div className="rounded overflow-hidden" style={{ background: "#fff" }}>
+                  <iframe
+                    src={`https://widgets.dellin.ru/calculator?group1=disabled&group11=disabled&derival_point=${shipCity === "Москва" ? "7700000000000000000000000" : "6200000100000000000000000"}&derival_to_door=off&arrival_to_door=on&disabled_calculation=on&links.creator=hide&links.services=hide&insurance=0&package=1`}
+                    width="100%"
+                    height="390"
+                    scrolling="no"
+                    style={{ border: "none", display: "block" }}
+                    title="Калькулятор Деловые Линии"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+                  {SHIPPING_CALCS.filter(tk => tk.name !== "Деловые Линии").map(tk => (
                     <a key={tk.name} href={tk.url} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-2 p-2.5 rounded text-xs no-underline transition-all"
                       style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#e8e0d0" }}
@@ -434,7 +445,7 @@ export default function CalculatorSection({
                 </div>
 
                 <div className="text-xs mt-3" style={{ color: "rgba(138,154,181,0.5)" }}>
-                  Перейдите на сайт ТК и укажите вес {totalWeight.toFixed(1)} кг для расчёта стоимости
+                  Вес заказа: {totalWeight.toFixed(1)} кг · Остальные ТК — ссылки на их калькуляторы
                 </div>
               </div>
             )}
