@@ -25,10 +25,15 @@ export default function Admin() {
 
   const load = async () => {
     setLoading(true);
-    const res  = await fetch(`${API}?show_all=1`);
-    const data = await res.json();
-    setProducts((data.products || []).filter((p: Product) => p.is_active));
-    setLoading(false);
+    try {
+      const res  = await fetch(`${API}?show_all=1`);
+      const data = await res.json();
+      setProducts((data.products || []).filter((p: Product) => p.is_active));
+    } catch {
+      notify("Ошибка загрузки товаров", false);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, []);
 

@@ -32,7 +32,7 @@ def cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Role, X-Authorization",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Role, X-Authorization",
     }
 
 
