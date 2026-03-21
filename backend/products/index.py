@@ -32,12 +32,25 @@ def cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Role",
+        "Access-Control-Allow-Headers": "Content-Type, X-Role, X-Authorization",
     }
 
 
 def ok(data):
     return {"statusCode": 200, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps(data, ensure_ascii=False)}
+
+
+def deny():
+    return {"statusCode": 403, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps({"error": "forbidden"})}
+
+
+def check_admin_or_manager(headers):
+    token = (headers or {}).get("X-Authorization", "") or (headers or {}).get("x-authorization", "")
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "")
+    manager_pw = os.environ.get("MANAGER_PASSWORD", "")
+    if token and (token == admin_pw or token == manager_pw):
+        return True
+    return False
 
 
 def ean13_barcode_svg(code: str) -> str:
@@ -155,7 +168,6 @@ def handler(event: dict, context) -> dict:
     if method == "POST":
         action = body.get("action", "create")
 
-        # Авторизация
         if action == "auth":
             role       = body.get("role", "admin")
             password   = body.get("password", "")
@@ -164,6 +176,9 @@ def handler(event: dict, context) -> dict:
             if password and password == expected:
                 return ok({"ok": True, "role": role})
             return {"statusCode": 401, "headers": {**cors_headers(), "Content-Type": "application/json"}, "body": json.dumps({"ok": False})}
+
+        if not check_admin_or_manager(event.get("headers")):
+            return deny()
 
         # Загрузка фото → CDN
         if action == "upload":
@@ -287,6 +302,8 @@ def handler(event: dict, context) -> dict:
 
     # ── PUT — обновить товар ──
     if method == "PUT":
+        if not check_admin_or_manager(event.get("headers")):
+            return deny()
         conn = get_conn()
         cur  = conn.cursor()
         gtin = body.get("gtin", "")
@@ -319,6 +336,8 @@ def handler(event: dict, context) -> dict:
 
     # ── DELETE — удалить товар / фото / размер ──
     if method == "DELETE":
+        if not check_admin_or_manager(event.get("headers")):
+            return deny()
         action = params.get("action", "product")
         pid    = int(params.get("id", 0))
         conn   = get_conn()

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { API, Product, FormState, ProductSize, emptyForm, DEFAULT_SIZES, sortSizes } from "./admin.types";
+import { API, Product, FormState, ProductSize, emptyForm, DEFAULT_SIZES, sortSizes, authFetch } from "./admin.types";
 import AdminProductTable from "./AdminProductTable";
 import AdminProductForm from "./AdminProductForm";
+import AdminHeader from "@/components/admin/AdminHeader";
 
 export default function Admin() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -65,11 +66,11 @@ export default function Admin() {
 
     let productId = editId;
     if (editId !== null) {
-      const res  = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
+      const res  = await authFetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
       const data = await res.json();
       if (data.barcode_url) notify("Штрихкод сгенерирован");
     } else {
-      const res  = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
+      const res  = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
       const data = await res.json();
       productId  = data.id;
       if (data.barcode_url) notify("Штрихкод сгенерирован");
@@ -83,19 +84,19 @@ export default function Admin() {
 
       for (const ci of currentImgs) {
         if (!formImages.find(fi => fi.url === ci.url)) {
-          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
+          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
         }
       }
       for (let i = 0; i < formImages.length; i++) {
         if (!currentImgs.find(ci => ci.url === formImages[i].url)) {
-          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
+          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
         }
       }
 
       for (const s of formSizes) {
         if (s.size_label.trim()) {
           const existingSize = currentProd?.sizes?.find((cs: ProductSize & { id: number }) => cs.id === (s as ProductSize & { id?: number }).id);
-          await fetch(API, {
+          await authFetch(API, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "add_size", ...s, product_id: productId, id: existingSize ? (s as ProductSize & { id?: number }).id : undefined }),
           });
@@ -111,7 +112,7 @@ export default function Admin() {
 
   const remove = async (id: number, name: string) => {
     if (!confirm(`Скрыть товар «${name}»?`)) return;
-    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_product", id }) });
+    await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_product", id }) });
     notify("Товар скрыт");
     load();
   };
@@ -127,33 +128,7 @@ export default function Admin() {
         }}>{toast.msg}</div>
       )}
 
-      {/* Шапка */}
-      <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(245,124,0,0.2)", background: "#080c11" }}>
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 flex items-center justify-center" style={{ background: "#f57c00" }}>
-            <Icon name="Flame" size={14} style={{ color: "#0d1117" }} />
-          </div>
-          <span className="font-bold tracking-widest uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>СПЕЦНАЗ</span>
-          <span className="text-sm" style={{ color: "#8a9ab5" }}>/ Администратор</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <a href="/admin/seo" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
-            <Icon name="Search" size={14} /> SEO
-          </a>
-          <a href="/admin/payments" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
-            <Icon name="Calculator" size={14} /> Условия оплаты
-          </a>
-          <a href="/admin/promo" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "#f57c00")} onMouseLeave={e => (e.currentTarget.style.color = "#8a9ab5")}>
-            <Icon name="Send" size={14} /> Рассылка
-          </a>
-          <a href="/" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
-            <Icon name="ArrowLeft" size={14} /> На сайт
-          </a>
-        </div>
-      </div>
+      <AdminHeader section="Администратор" />
 
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="flex items-center justify-between mb-8">

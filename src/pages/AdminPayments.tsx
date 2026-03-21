@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+import AdminHeader from "@/components/admin/AdminHeader";
+import { authFetch } from "./shared.types";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
@@ -44,7 +46,7 @@ export default function AdminPayments() {
 
   const save = async () => {
     setSaving(true);
-    await fetch(API, {
+    await authFetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "save_payment_options", items: options.map(o => ({ id: o.id, label: o.label, description: o.desc, coeff: o.coeff, sort_order: o.sort_order })) }),
@@ -70,22 +72,8 @@ export default function AdminPayments() {
 
   return (
     <div style={{ background: "#0a0e14", minHeight: "100vh" }}>
+      <AdminHeader section="Условия оплаты" />
       <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-2" style={{ borderBottom: "1px solid rgba(245,124,0,0.15)", paddingBottom: 16 }}>
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 flex items-center justify-center" style={{ background: "#f57c00" }}>
-              <Icon name="Flame" size={14} style={{ color: "#0d1117" }} />
-            </div>
-            <span className="font-bold tracking-widest uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>СПЕЦНАЗ</span>
-            <span className="text-sm" style={{ color: "#8a9ab5" }}>/ Условия оплаты</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <a href="/admin" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
-              <Icon name="ArrowLeft" size={14} /> Товары
-            </a>
-          </div>
-        </div>
-
         <div className="mt-8">
           <div className="flex items-center justify-between mb-6">
             <div>

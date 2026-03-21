@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
-import { API, STOCK_OPTIONS, ManagerForm, ProductSize, inp, inpSt, lbl } from "./managerTypes";
+import { API, STOCK_OPTIONS, ManagerForm, ProductSize, inp, inpSt, lbl, authFetch } from "./managerTypes";
 
 type TabId = "main" | "photos" | "sizes" | "stock" | "specs";
 
@@ -56,7 +56,7 @@ export default function ManagerProductForm({
     const reader = new FileReader();
     reader.onload = async () => {
       const b64 = (reader.result as string).split(",")[1];
-      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
+      const res = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
       const d   = await res.json();
       setForm(f => ({ ...f, image_url: d.url }));
       setUploading(false);
@@ -71,7 +71,7 @@ export default function ManagerProductForm({
     const reader = new FileReader();
     reader.onload = async () => {
       const b64 = (reader.result as string).split(",")[1];
-      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
+      const res = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "upload", file: b64, contentType: file.type }) });
       const d   = await res.json();
       setFormImages(imgs => [...imgs, { url: d.url }]);
       setUploading(false);

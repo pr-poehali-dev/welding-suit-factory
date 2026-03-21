@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
-import { API, Product, ProductImage, ProductSize, ManagerForm, DEFAULT_SIZES, emptyForm, sortSizes } from "./managerTypes";
+import { API, Product, ProductImage, ProductSize, ManagerForm, DEFAULT_SIZES, emptyForm, sortSizes, authFetch } from "./managerTypes";
 import ManagerAuth from "./ManagerAuth";
 import ManagerProductForm from "./ManagerProductForm";
 
@@ -44,7 +44,7 @@ export default function Manager() {
       clearTimeout(timeout);
       const data = await res.json();
       if (data.ok) {
-        sessionStorage.setItem("manager_auth", "1");
+        sessionStorage.setItem("manager_token", password);
         setAuthed(true);
         load();
       } else {
@@ -57,7 +57,7 @@ export default function Manager() {
   };
 
   useEffect(() => {
-    if (sessionStorage.getItem("manager_auth")) { setAuthed(true); load(); }
+    if (sessionStorage.getItem("manager_token")) { setAuthed(true); load(); }
   }, []);
 
   const load = async () => {
@@ -74,7 +74,7 @@ export default function Manager() {
 
   const remove = async (id: number, name: string) => {
     if (!confirm(`Удалить товар «${name}»? Он будет скрыт с сайта и из менеджера.`)) return;
-    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_product", id }) });
+    await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_product", id }) });
     notify("Товар удалён");
     load();
   };
@@ -109,9 +109,9 @@ export default function Manager() {
     const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
     let productId = editId;
     if (editId !== null) {
-      await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
+      await authFetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: editId }) });
     } else {
-      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
+      const res = await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", ...body }) });
       productId = (await res.json()).id;
     }
     if (productId) {
@@ -120,15 +120,15 @@ export default function Manager() {
       const currentImgs: ProductImage[] = currentProd?.images || [];
       for (const ci of currentImgs) {
         if (!formImages.find(fi => fi.url === ci.url))
-          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
+          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_image", id: ci.id }) });
       }
       for (let i = 0; i < formImages.length; i++) {
         if (!currentImgs.find(ci => ci.url === formImages[i].url))
-          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
+          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_image", product_id: productId, url: formImages[i].url, sort_order: i }) });
       }
       for (const s of formSizes) {
         if (s.size_label.trim())
-          await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_size", ...s, product_id: productId }) });
+          await authFetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add_size", ...s, product_id: productId }) });
       }
     }
     setSaving(false);
@@ -165,7 +165,7 @@ export default function Manager() {
           <span className="text-sm" style={{ color: "#8a9ab5" }}>/ Менеджер</span>
         </div>
         <div className="flex items-center gap-4">
-          <button onClick={() => { sessionStorage.removeItem("manager_auth"); setAuthed(false); }}
+          <button onClick={() => { sessionStorage.removeItem("manager_token"); setAuthed(false); }}
             className="text-sm flex items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a9ab5" }}>
             <Icon name="LogOut" size={14} /> Выйти
           </button>

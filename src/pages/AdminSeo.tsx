@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+import AdminHeader from "@/components/admin/AdminHeader";
+import { authFetch } from "./shared.types";
 
 const API = "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e";
 
@@ -45,7 +47,7 @@ export default function AdminSeo() {
 
   const save = async () => {
     setSaving(true);
-    await fetch(API, {
+    await authFetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "save_seo", seo }),
@@ -79,18 +81,7 @@ export default function AdminSeo() {
         }}>{toast.msg}</div>
       )}
 
-      <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(245,124,0,0.2)", background: "#080c11" }}>
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 flex items-center justify-center" style={{ background: "#f57c00" }}>
-            <Icon name="Flame" size={14} style={{ color: "#0d1117" }} />
-          </div>
-          <span className="font-bold tracking-widest uppercase" style={{ fontFamily: oswald, color: "#f57c00" }}>СПЕЦНАЗ</span>
-          <span className="text-sm" style={{ color: "#8a9ab5" }}>/ SEO</span>
-        </div>
-        <a href="/admin" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
-          <Icon name="ArrowLeft" size={14} /> Товары
-        </a>
-      </div>
+      <AdminHeader section="SEO" />
 
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="mb-8">

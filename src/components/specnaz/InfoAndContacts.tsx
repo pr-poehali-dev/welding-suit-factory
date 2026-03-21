@@ -303,6 +303,11 @@ export default function InfoAndContacts({ scrollTo }: InfoAndContactsProps) {
             </a>
           </div>
         </div>
+        <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(245,124,0,0.1)" }}>
+          <p className="text-xs text-center leading-relaxed" style={{ color: "rgba(138,154,181,0.5)" }}>
+            Информация, представленная на сайте, носит информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями ст. 437 Гражданского кодекса Российской Федерации. Для получения подробной информации обращайтесь к менеджерам компании.
+          </p>
+        </div>
       </footer>
 
       <section aria-label="О производстве спецодежды" className="sr-only">

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import Icon from "@/components/ui/icon";
+import AdminHeader from "@/components/admin/AdminHeader";
+import { authFetch } from "./shared.types";
 
 const PROMO_API = "https://functions.poehali.dev/01af805d-fc1a-45ea-a4f2-054ed53c55b7";
 
@@ -73,7 +75,7 @@ export default function AdminPromo() {
   const handleImport = async () => {
     if (!pendingFile) return;
     setImporting(true);
-    const res = await fetch(`${PROMO_API}/import`, {
+    const res = await authFetch(`${PROMO_API}/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ file: pendingFile.b64, filename: pendingFile.filename }),
@@ -89,7 +91,7 @@ export default function AdminPromo() {
 
   const unsubscribe = async (id: number) => {
     if (!confirm("Отписать этого клиента от рассылки?")) return;
-    await fetch(`${PROMO_API}/unsubscribe`, {
+    await authFetch(`${PROMO_API}/unsubscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
@@ -106,7 +108,7 @@ export default function AdminPromo() {
     if (!confirm(`Отправить письмо ${withEmail.length} клиентам?`)) return;
     setSending(true);
     setResult(null);
-    const res = await fetch(`${PROMO_API}/send`, {
+    const res = await authFetch(`${PROMO_API}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ subject, text }),
@@ -137,24 +139,7 @@ export default function AdminPromo() {
         </div>
       )}
 
-      {/* Шапка */}
-      <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(245,124,0,0.2)", background: "#080c11" }}>
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 flex items-center justify-center" style={{ background: "#f57c00" }}>
-            <Icon name="Flame" size={14} style={{ color: "#0d1117" }} />
-          </div>
-          <span className="font-bold tracking-widest uppercase" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>СПЕЦНАЗ</span>
-          <span className="text-sm" style={{ color: "#8a9ab5" }}>/ Рассылка</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <a href="/admin" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
-            <Icon name="Package" size={14} /> Товары
-          </a>
-          <a href="/" className="text-sm flex items-center gap-1" style={{ color: "#8a9ab5" }}>
-            <Icon name="ArrowLeft" size={14} /> На сайт
-          </a>
-        </div>
-      </div>
+      <AdminHeader section="Рассылка" />
 
       <div className="max-w-5xl mx-auto px-4 py-10">
 
