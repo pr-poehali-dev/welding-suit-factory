@@ -15,8 +15,9 @@ export default function Header({ mobileMenuOpen, setMobileMenuOpen, scrollTo }: 
           <div className="w-8 h-8 flex items-center justify-center" style={{ background: "#f57c00" }}>
             <Icon name="Flame" size={18} style={{ color: "#0d1117" }} />
           </div>
-          <div className="font-bold text-lg leading-none" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>
-            СПЕЦНАЗ <span style={{ color: "#8a9ab5", fontWeight: 400, fontSize: "0.85em", letterSpacing: "0.05em" }}>Швейная фабрика</span>
+          <div>
+            <div className="font-bold text-lg leading-none" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00", letterSpacing: "0.1em" }}>СПЕЦНАЗ</div>
+            <div className="text-xs" style={{ color: "#8a9ab5", letterSpacing: "0.05em" }}>Швейная фабрика</div>
           </div>
         </div>
 
