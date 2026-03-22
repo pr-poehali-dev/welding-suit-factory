@@ -57,9 +57,17 @@ export default function CatalogSection({
   const leaf = lastNode(catalogPath);
   const showProducts = isLeafNode(leaf);
 
-  const filteredProducts = showProducts && leaf?.categoryTag
+  const filteredProducts = (showProducts && leaf?.categoryTag
     ? allProducts.filter(p => p.category === leaf.categoryTag)
-    : allProducts;
+    : allProducts
+  ).slice().sort((a, b) => {
+    const aHasOrder = a.sort_order > 0;
+    const bHasOrder = b.sort_order > 0;
+    if (aHasOrder && bHasOrder) return a.sort_order - b.sort_order;
+    if (aHasOrder) return -1;
+    if (bHasOrder) return 1;
+    return a.base_price - b.base_price;
+  });
 
   return (
     <>
