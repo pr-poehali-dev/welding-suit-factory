@@ -4,6 +4,8 @@ import { API, Product, FormState, ProductSize, emptyForm, DEFAULT_SIZES, sortSiz
 import AdminProductTable from "./AdminProductTable";
 import AdminProductForm from "./AdminProductForm";
 import AdminHeader from "@/components/admin/AdminHeader";
+import AdminCatalogTree from "./AdminCatalogTree";
+import { CATALOG_TREE, CatalogNode } from "@/components/specnaz/constants";
 
 export default function Admin() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -17,6 +19,7 @@ export default function Admin() {
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<"main" | "photos" | "sizes" | "stock">("main");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const notify = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -127,6 +130,17 @@ export default function Admin() {
     load();
   };
 
+  const allLeafTags = CATALOG_TREE.flatMap(function getTags(n: CatalogNode): string[] {
+    if (n.categoryTag) return [n.categoryTag];
+    return (n.children || []).flatMap(getTags);
+  });
+
+  const filteredProducts = selectedCategory === null
+    ? products
+    : selectedCategory === "__uncategorized__"
+      ? products.filter(p => !allLeafTags.includes(p.category))
+      : products.filter(p => p.category === selectedCategory);
+
   return (
     <div style={{ minHeight: "100vh", background: "#0d1117", color: "#e8e0d0", fontFamily: "'IBM Plex Sans', sans-serif" }}>
 
@@ -140,11 +154,11 @@ export default function Admin() {
 
       <AdminHeader section="Администратор" />
 
-      <div className="max-w-5xl mx-auto px-4 py-10">
+      <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#ffffff" }}>ТОВАРЫ</h1>
-            <p className="text-sm mt-1" style={{ color: "#8a9ab5" }}>{products.length} позиций в каталоге</p>
+            <p className="text-sm mt-1" style={{ color: "#8a9ab5" }}>{filteredProducts.length} из {products.length} позиций</p>
           </div>
           <button onClick={openNew} className="flex items-center gap-2 px-5 py-3 text-sm font-bold rounded"
             style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: "pointer" }}>
@@ -152,12 +166,26 @@ export default function Admin() {
           </button>
         </div>
 
-        <AdminProductTable
-          products={products}
-          loading={loading}
-          onEdit={openEdit}
-          onRemove={remove}
-        />
+        <div className="flex gap-6">
+          <div className="hidden md:block flex-shrink-0" style={{ width: 260 }}>
+            <div className="sticky top-4">
+              <AdminCatalogTree
+                products={products}
+                selectedCategory={selectedCategory}
+                onSelect={setSelectedCategory}
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <AdminProductTable
+              products={filteredProducts}
+              loading={loading}
+              onEdit={openEdit}
+              onRemove={remove}
+            />
+          </div>
+        </div>
       </div>
 
       {showForm && (
