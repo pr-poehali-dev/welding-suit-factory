@@ -179,11 +179,18 @@ export default function Manager() {
     return (n.children || []).flatMap(getTags);
   });
 
-  const filteredProducts = selectedCategory === null
+  const filteredProducts = (selectedCategory === null
     ? products
     : selectedCategory === "__uncategorized__"
       ? products.filter(p => !allLeafTags.includes(p.category))
-      : products.filter(p => p.category === selectedCategory);
+      : products.filter(p => p.category === selectedCategory)
+  ).slice().sort((a, b) => {
+    const aHas = a.sort_order > 0, bHas = b.sort_order > 0;
+    if (aHas && bHas) return a.sort_order - b.sort_order;
+    if (aHas) return -1;
+    if (bHas) return 1;
+    return a.base_price - b.base_price;
+  });
 
   if (!authed) return (
     <ManagerAuth
