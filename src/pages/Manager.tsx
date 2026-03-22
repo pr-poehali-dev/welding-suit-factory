@@ -107,15 +107,36 @@ export default function Manager() {
 
   const openNew = () => {
     setEditId(null);
-    setForm(emptyForm());
+    const f = emptyForm();
+    if (selectedCategory && selectedCategory !== "__uncategorized__") {
+      f.category = selectedCategory;
+    }
+    setForm(f);
     setFormImages([]);
     setFormSizes(DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };
 
+  const openCopy = (p: Product) => {
+    setEditId(null);
+    setForm({ name: "", category: p.category, description: p.description, gost: p.gost,
+      badge: p.badge || "", base_price: p.base_price, image_url: p.image_url, is_active: p.is_active,
+      sort_order: p.sort_order, stock_status: p.stock_status ?? "in_stock",
+      protection_class: p.protection_class || "", documentation: p.documentation || "",
+      materials: p.materials || "", extra_info: p.extra_info || "",
+      pack_length: p.pack_length || 0, pack_width: p.pack_width || 0,
+      pack_height: p.pack_height || 0, unit_weight: p.unit_weight || 0 });
+    setFormImages((p.images || []).map(i => ({ url: i.url })));
+    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "", stock_qty: s.stock_qty ?? 0 }))) : DEFAULT_SIZES);
+    setActiveTab("main");
+    setShowForm(true);
+  };
+
   const save = async () => {
     if (!form.name.trim()) { notify("Введите название", false); return; }
+    const duplicate = products.find(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase() && p.id !== editId);
+    if (duplicate) { notify("Товар с таким названием уже существует", false); return; }
     setSaving(true);
     try {
       const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
@@ -260,12 +281,16 @@ export default function Manager() {
                     <div className="col-span-2 text-right text-sm font-bold" style={{ fontFamily: "'Oswald', sans-serif", color: "#f57c00" }}>
                       {p.base_price.toLocaleString("ru-RU")} ₽
                     </div>
-                    <div className="col-span-2 flex justify-end gap-2">
-                      <button onClick={() => openEdit(p)} className="text-xs px-3 py-1.5 rounded"
+                    <div className="col-span-2 flex justify-end gap-1.5">
+                      <button onClick={() => openEdit(p)} className="text-xs px-3 py-1.5 rounded" title="Изменить"
                         style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.3)", color: "#f57c00", cursor: "pointer" }}>
                         Изменить
                       </button>
-                      <button onClick={() => remove(p.id, p.name)} className="text-xs px-2 py-1.5 rounded"
+                      <button onClick={() => openCopy(p)} className="text-xs px-2 py-1.5 rounded" title="Копировать карточку"
+                        style={{ background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)", color: "#60a5fa", cursor: "pointer" }}>
+                        <Icon name="Copy" size={13} />
+                      </button>
+                      <button onClick={() => remove(p.id, p.name)} className="text-xs px-2 py-1.5 rounded" title="Удалить"
                         style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", cursor: "pointer" }}>
                         <Icon name="Trash2" size={13} />
                       </button>
@@ -290,6 +315,8 @@ export default function Manager() {
           onSave={save}
           onClose={() => { setSaving(false); setUploading(false); setShowForm(false); }}
           notify={notify}
+          lockedCategory={selectedCategory && selectedCategory !== "__uncategorized__" ? selectedCategory : null}
+          products={products}
         />
       )}
     </div>

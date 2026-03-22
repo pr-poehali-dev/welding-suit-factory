@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { CATALOG_LEAF_CATEGORIES } from "@/components/specnaz/constants";
-import { API, STOCK_OPTIONS, ManagerForm, ProductSize, inp, inpSt, lbl, authFetch } from "./managerTypes";
+import { API, STOCK_OPTIONS, ManagerForm, ProductSize, Product, inp, inpSt, lbl, authFetch } from "./managerTypes";
 
 type TabId = "main" | "photos" | "sizes" | "stock" | "specs";
 
@@ -21,6 +21,8 @@ interface ManagerProductFormProps {
   onSave: () => void;
   onClose: () => void;
   notify: (msg: string, ok?: boolean) => void;
+  lockedCategory?: string | null;
+  products?: Product[];
 }
 
 function getShippingCalcs(weight: number, length: number, width: number, height: number) {
@@ -46,9 +48,13 @@ export default function ManagerProductForm({
   activeTab, setActiveTab,
   uploading, setUploading,
   saving, onSave, onClose, notify,
+  lockedCategory, products,
 }: ManagerProductFormProps) {
   const fileRef  = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
+  const nameIsDuplicate = !!form.name.trim() && (products || []).some(
+    p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase() && p.id !== editId
+  );
 
   const handleMainPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -132,7 +138,14 @@ export default function ManagerProductForm({
                 <div style={lbl} className="mb-2">Главное фото</div>
                 <div className="flex items-center gap-4">
                   {form.image_url
-                    ? <img src={form.image_url} alt="" className="w-20 h-20 rounded object-cover" style={{ border: "1px solid rgba(245,124,0,0.3)" }} />
+                    ? <div className="relative group">
+                        <img src={form.image_url} alt="" className="w-20 h-20 rounded object-cover" style={{ border: "1px solid rgba(245,124,0,0.3)" }} />
+                        <button onClick={() => setForm(f => ({ ...f, image_url: null }))}
+                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ background: "rgba(248,113,113,0.9)", border: "none", cursor: "pointer" }}>
+                          <Icon name="X" size={12} style={{ color: "#fff" }} />
+                        </button>
+                      </div>
                     : <div className="w-20 h-20 rounded flex items-center justify-center" style={{ background: "#0d1117", border: "1px dashed rgba(245,124,0,0.3)" }}><Icon name="Image" size={24} style={{ color: "rgba(138,154,181,0.4)" }} /></div>
                   }
                   <div>
@@ -146,9 +159,12 @@ export default function ManagerProductForm({
                 </div>
               </div>
               <div><div style={lbl} className="mb-2">Название *</div>
-                <input className={inp} style={inpSt} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Костюм сварщика КС-01" /></div>
-              <div><div style={lbl} className="mb-2">Категория</div>
-                <select className={inp} style={inpSt} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                <input className={inp} style={{ ...inpSt, ...(nameIsDuplicate ? { borderColor: "#f87171" } : {}) }} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Костюм сварщика КС-01" />
+                {nameIsDuplicate && <div className="text-xs mt-1" style={{ color: "#f87171" }}>Товар с таким названием уже существует</div>}</div>
+              <div><div style={lbl} className="mb-2">Категория {lockedCategory ? <span className="normal-case" style={{ color: "#60a5fa", fontSize: 10 }}>(из раздела каталога)</span> : null}</div>
+                <select className={inp} style={{ ...inpSt, ...(lockedCategory ? { opacity: 0.6, cursor: "not-allowed" } : {}) }} value={form.category}
+                  disabled={!!lockedCategory}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                   {CATALOG_LEAF_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select></div>
               <div><div style={lbl} className="mb-2">Описание</div>
@@ -397,8 +413,8 @@ export default function ManagerProductForm({
         </div>
 
         <div className="px-6 py-4 flex gap-3 flex-shrink-0" style={{ borderTop: "1px solid rgba(245,124,0,0.15)" }}>
-          <button onClick={onSave} disabled={saving} className="flex-1 py-3 text-sm font-bold rounded"
-            style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+          <button onClick={onSave} disabled={saving || nameIsDuplicate} className="flex-1 py-3 text-sm font-bold rounded"
+            style={{ background: "#f57c00", color: "#0d1117", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.05em", cursor: saving || nameIsDuplicate ? "not-allowed" : "pointer", opacity: saving || nameIsDuplicate ? 0.5 : 1 }}>
             {saving ? "Сохраняю..." : editId !== null ? "Сохранить изменения" : "Добавить товар"}
           </button>
           <button onClick={onClose} className="px-5 py-3 text-sm rounded"

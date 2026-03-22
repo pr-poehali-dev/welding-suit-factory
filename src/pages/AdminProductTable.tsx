@@ -6,10 +6,11 @@ interface AdminProductTableProps {
   products: Product[];
   loading: boolean;
   onEdit: (p: Product) => void;
+  onCopy: (p: Product) => void;
   onRemove: (id: number, name: string) => void;
 }
 
-export default function AdminProductTable({ products, loading, onEdit, onRemove }: AdminProductTableProps) {
+export default function AdminProductTable({ products, loading, onEdit, onCopy, onRemove }: AdminProductTableProps) {
   if (loading) {
     return <div className="text-center py-20" style={{ color: "#8a9ab5" }}>Загрузка...</div>;
   }
@@ -67,13 +68,17 @@ export default function AdminProductTable({ products, loading, onEdit, onRemove 
             <StockBadge status={p.stock_status ?? "in_stock"} />
           </div>
 
-          <div className="col-span-2 flex justify-end gap-2">
-            <button onClick={() => onEdit(p)}
+          <div className="col-span-2 flex justify-end gap-1.5">
+            <button onClick={() => onEdit(p)} title="Изменить"
               style={{ background: "rgba(245,124,0,0.1)", border: "1px solid rgba(245,124,0,0.3)", color: "#f57c00", cursor: "pointer", borderRadius: 4, padding: "4px 10px" }}
               className="text-xs">
               Изменить
             </button>
-            <button onClick={() => onRemove(p.id, p.name)}
+            <button onClick={() => onCopy(p)} title="Копировать карточку"
+              style={{ background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)", color: "#60a5fa", cursor: "pointer", borderRadius: 4, padding: "4px 8px" }}>
+              <Icon name="Copy" size={13} />
+            </button>
+            <button onClick={() => onRemove(p.id, p.name)} title="Удалить"
               style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", cursor: "pointer", borderRadius: 4, padding: "4px 8px" }}>
               <Icon name="Trash2" size={13} />
             </button>

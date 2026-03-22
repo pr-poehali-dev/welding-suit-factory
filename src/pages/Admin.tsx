@@ -42,9 +42,31 @@ export default function Admin() {
 
   const openNew = () => {
     setEditId(null);
-    setForm(emptyForm());
+    const f = emptyForm();
+    if (selectedCategory && selectedCategory !== "__uncategorized__") {
+      f.category = selectedCategory;
+    }
+    setForm(f);
     setFormImages([]);
     setFormSizes(DEFAULT_SIZES);
+    setActiveTab("main");
+    setShowForm(true);
+  };
+
+  const openCopy = (p: Product) => {
+    setEditId(null);
+    setForm({
+      name: "", category: p.category, description: p.description,
+      gost: p.gost, badge: p.badge || "", base_price: p.base_price,
+      image_url: p.image_url, is_active: p.is_active, sort_order: p.sort_order,
+      stock_status: p.stock_status ?? "in_stock",
+      protection_class: p.protection_class || "", documentation: p.documentation || "",
+      materials: p.materials || "", extra_info: p.extra_info || "",
+      pack_length: p.pack_length || 0, pack_width: p.pack_width || 0,
+      pack_height: p.pack_height || 0, unit_weight: p.unit_weight || 0,
+    });
+    setFormImages((p.images || []).map(i => ({ url: i.url })));
+    setFormSizes(p.sizes?.length ? sortSizes(p.sizes.map(s => ({ ...s, gtin: s.gtin || "", stock_qty: s.stock_qty ?? 0 }))) : DEFAULT_SIZES);
     setActiveTab("main");
     setShowForm(true);
   };
@@ -69,6 +91,8 @@ export default function Admin() {
 
   const save = async () => {
     if (!form.name.trim()) { notify("Введите название товара", false); return; }
+    const duplicate = products.find(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase() && p.id !== editId);
+    if (duplicate) { notify("Товар с таким названием уже существует", false); return; }
     setSaving(true);
     try {
       const body = { ...form, badge: form.badge?.trim() || null, base_price: Number(form.base_price), sort_order: Number(form.sort_order) };
@@ -182,6 +206,7 @@ export default function Admin() {
               products={filteredProducts}
               loading={loading}
               onEdit={openEdit}
+              onCopy={openCopy}
               onRemove={remove}
             />
           </div>
@@ -205,6 +230,8 @@ export default function Admin() {
           onSave={save}
           onClose={() => { setSaving(false); setUploading(false); setShowForm(false); }}
           notify={notify}
+          lockedCategory={selectedCategory && selectedCategory !== "__uncategorized__" ? selectedCategory : null}
+          products={products}
         />
       )}
     </div>
