@@ -108,8 +108,8 @@ def list_workers(cur):
 
 def create_worker(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.workers (tab_number, full_name, position, phone, hourly_rate) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("hourly_rate", 0))
+        f"INSERT INTO {SCHEMA}.workers (tab_number, full_name, position, phone) VALUES (%s,%s,%s,%s) RETURNING *",
+        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -117,8 +117,8 @@ def create_worker(cur, data):
 
 def update_worker(cur, wid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s, hourly_rate=%s, is_active=%s WHERE id=%s RETURNING *",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("hourly_rate", 0), data.get("is_active", True), wid)
+        f"UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s, is_active=%s WHERE id=%s RETURNING *",
+        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("is_active", True), wid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()

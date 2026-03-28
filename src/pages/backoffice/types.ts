@@ -43,7 +43,6 @@ export interface Worker {
   full_name: string;
   position: string;
   phone: string;
-  hourly_rate: number;
   is_active: boolean;
   created_at: string;
 }

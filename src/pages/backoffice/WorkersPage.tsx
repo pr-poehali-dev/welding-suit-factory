@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 
 const EMPTY: Partial<Worker> = {
-  tab_number: "", full_name: "", position: "", phone: "", hourly_rate: 0, is_active: true,
+  tab_number: "", full_name: "", position: "", phone: "", is_active: true,
 };
 
 export default function WorkersPage() {
@@ -72,7 +72,6 @@ export default function WorkersPage() {
                 <th className="px-4 py-3">Таб. номер</th>
                 <th className="px-4 py-3">ФИО</th>
                 <th className="px-4 py-3">Должность</th>
-                <th className="px-4 py-3">Ставка, р/ч</th>
                 <th className="px-4 py-3">Телефон</th>
                 <th className="px-4 py-3">Активен</th>
                 <th className="px-4 py-3 text-right">Действия</th>
@@ -84,7 +83,6 @@ export default function WorkersPage() {
                   <td className="px-4 py-2.5 font-mono text-slate-600">{w.tab_number}</td>
                   <td className="px-4 py-2.5 font-medium text-slate-700">{w.full_name}</td>
                   <td className="px-4 py-2.5 text-slate-600">{w.position}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{Number(w.hourly_rate).toLocaleString("ru")}</td>
                   <td className="px-4 py-2.5 text-slate-600">{w.phone || "-"}</td>
                   <td className="px-4 py-2.5">
                     {w.is_active ? (
@@ -106,7 +104,7 @@ export default function WorkersPage() {
                 </tr>
               ))}
               {workers.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
               )}
             </tbody>
           </table>
@@ -132,15 +130,6 @@ export default function WorkersPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Должность</label>
               <Input className="bg-white text-slate-800 border-slate-300" value={form.position ?? ""} onChange={f("position")} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Ставка (р/час)</label>
-              <Input
-                className="bg-white text-slate-800 border-slate-300"
-                type="number"
-                value={form.hourly_rate ?? 0}
-                onChange={(e) => setForm({ ...form, hourly_rate: Number(e.target.value) })}
-              />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Телефон</label>
