@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { boFetch, Client } from "@/pages/backoffice/types";
+import { boFetch, Client, Group } from "@/pages/backoffice/types";
+import GroupManager from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 
 const EMPTY: Partial<Client> = {
-  name: "", org: "", phone: "", email: "", inn: "", address: "", notes: "",
+  name: "", org: "", phone: "", email: "", inn: "", address: "", notes: "", group_id: null,
 };
 
 export default function ClientsPage() {
@@ -23,6 +24,12 @@ export default function ClientsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<Client>>(EMPTY);
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState<number | null>(null);
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["bo-groups", "clients"],
+    queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "clients" }),
+  });
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ["bo-clients"],
@@ -54,12 +61,13 @@ export default function ClientsPage() {
 
   const filtered = clients.filter((c) => {
     const q = search.toLowerCase();
-    return (
+    const matchSearch =
       c.name.toLowerCase().includes(q) ||
       c.org.toLowerCase().includes(q) ||
       c.phone.includes(q) ||
-      c.inn.includes(q)
-    );
+      c.inn.includes(q);
+    const matchGroup = groupFilter === null || c.group_id === groupFilter;
+    return matchSearch && matchGroup;
   });
 
   const f = (key: keyof Client) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -82,6 +90,8 @@ export default function ClientsPage() {
         </div>
       </div>
 
+      <GroupManager entityType="clients" selectedGroupId={groupFilter} onSelect={setGroupFilter} />
+
       {isLoading ? (
         <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
       ) : (
@@ -90,6 +100,7 @@ export default function ClientsPage() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-3">Название</th>
+                <th className="px-4 py-3">Группа</th>
                 <th className="px-4 py-3">Организация</th>
                 <th className="px-4 py-3">Телефон</th>
                 <th className="px-4 py-3">Email</th>
@@ -101,6 +112,7 @@ export default function ClientsPage() {
               {filtered.map((c, i) => (
                 <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                   <td className="px-4 py-2.5 font-medium text-slate-700">{c.name}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{c.group_name || "—"}</td>
                   <td className="px-4 py-2.5 text-slate-600">{c.org || "-"}</td>
                   <td className="px-4 py-2.5 text-slate-600">{c.phone || "-"}</td>
                   <td className="px-4 py-2.5 text-slate-600">{c.email || "-"}</td>
@@ -118,7 +130,7 @@ export default function ClientsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
               )}
             </tbody>
           </table>
@@ -150,6 +162,19 @@ export default function ClientsPage() {
                 />
               </div>
             ))}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                value={form.group_id ?? ""}
+                onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— без группы —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Примечания</label>
               <Textarea

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { boFetch, Operation } from "@/pages/backoffice/types";
+import { boFetch, Operation, Group } from "@/pages/backoffice/types";
+import GroupManager from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +16,19 @@ import {
 } from "@/components/ui/dialog";
 
 const EMPTY: Partial<Operation> = {
-  name: "", description: "", has_material_norm: false, default_price: 0, sort_order: 0, is_active: true,
+  name: "", description: "", has_material_norm: false, default_price: 0, sort_order: 0, is_active: true, group_id: null,
 };
 
 export default function OperationsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<Operation>>(EMPTY);
+  const [groupFilter, setGroupFilter] = useState<number | null>(null);
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["bo-groups", "operations"],
+    queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "operations" }),
+  });
 
   const { data: operations = [], isLoading } = useQuery<Operation[]>({
     queryKey: ["bo-operations"],
@@ -51,7 +58,12 @@ export default function OperationsPage() {
   const openNew = () => { setForm(EMPTY); setOpen(true); };
   const openEdit = (o: Operation) => { setForm({ ...o }); setOpen(true); };
 
-  const sorted = [...operations].sort((a, b) => a.sort_order - b.sort_order);
+  const filtered = operations.filter((o) => {
+    const matchGroup = groupFilter === null || o.group_id === groupFilter;
+    return matchGroup;
+  });
+
+  const sorted = [...filtered].sort((a, b) => a.sort_order - b.sort_order);
 
   return (
     <div>
@@ -62,6 +74,8 @@ export default function OperationsPage() {
         </Button>
       </div>
 
+      <GroupManager entityType="operations" selectedGroupId={groupFilter} onSelect={setGroupFilter} />
+
       {isLoading ? (
         <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
       ) : (
@@ -71,6 +85,7 @@ export default function OperationsPage() {
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-3 w-12">#</th>
                 <th className="px-4 py-3">Название</th>
+                <th className="px-4 py-3">Группа</th>
                 <th className="px-4 py-3">Описание</th>
                 <th className="px-4 py-3">Норма расхода</th>
                 <th className="px-4 py-3">Стоимость</th>
@@ -83,6 +98,7 @@ export default function OperationsPage() {
                 <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                   <td className="px-4 py-2.5 text-slate-400">{o.sort_order}</td>
                   <td className="px-4 py-2.5 font-medium text-slate-700">{o.name}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{o.group_name || "—"}</td>
                   <td className="px-4 py-2.5 text-slate-600 max-w-xs truncate">{o.description || "-"}</td>
                   <td className="px-4 py-2.5">
                     {o.has_material_norm ? (
@@ -111,8 +127,8 @@ export default function OperationsPage() {
                   </td>
                 </tr>
               ))}
-              {operations.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+              {sorted.length === 0 && (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
               )}
             </tbody>
           </table>
@@ -134,6 +150,19 @@ export default function OperationsPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Описание</label>
               <Textarea className="bg-white text-slate-800 border-slate-300" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                value={form.group_id ?? ""}
+                onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— без группы —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Стоимость по умолчанию</label>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { boFetch, Fitting, Unit } from "@/pages/backoffice/types";
+import { boFetch, Fitting, Unit, Group } from "@/pages/backoffice/types";
+import GroupManager from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 
 const EMPTY: Partial<Fitting> = {
-  name: "", sku: "", unit_id: 0, price_per_unit: 0, description: "", is_active: true,
+  name: "", sku: "", unit_id: 0, price_per_unit: 0, description: "", is_active: true, group_id: null,
 };
 
 export default function FittingsPage() {
@@ -23,6 +24,12 @@ export default function FittingsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<Fitting>>(EMPTY);
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState<number | null>(null);
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["bo-groups", "fittings"],
+    queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "fittings" }),
+  });
 
   const { data: fittings = [], isLoading } = useQuery<Fitting[]>({
     queryKey: ["bo-fittings"],
@@ -59,7 +66,9 @@ export default function FittingsPage() {
 
   const filtered = fittings.filter((f) => {
     const q = search.toLowerCase();
-    return f.name.toLowerCase().includes(q) || f.sku.toLowerCase().includes(q);
+    const matchSearch = f.name.toLowerCase().includes(q) || f.sku.toLowerCase().includes(q);
+    const matchGroup = groupFilter === null || f.group_id === groupFilter;
+    return matchSearch && matchGroup;
   });
 
   return (
@@ -79,6 +88,8 @@ export default function FittingsPage() {
         </div>
       </div>
 
+      <GroupManager entityType="fittings" selectedGroupId={groupFilter} onSelect={setGroupFilter} />
+
       {isLoading ? (
         <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
       ) : (
@@ -88,6 +99,7 @@ export default function FittingsPage() {
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-3">Название</th>
                 <th className="px-4 py-3">Артикул</th>
+                <th className="px-4 py-3">Группа</th>
                 <th className="px-4 py-3">Ед. изм.</th>
                 <th className="px-4 py-3">Цена за ед.</th>
                 <th className="px-4 py-3">Активен</th>
@@ -99,6 +111,7 @@ export default function FittingsPage() {
                 <tr key={f.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                   <td className="px-4 py-2.5 font-medium text-slate-700">{f.name}</td>
                   <td className="px-4 py-2.5 font-mono text-slate-600">{f.sku}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{f.group_name || "—"}</td>
                   <td className="px-4 py-2.5 text-slate-600">{f.unit_short || f.unit_name || "-"}</td>
                   <td className="px-4 py-2.5 text-slate-600">{Number(f.price_per_unit).toLocaleString("ru")} r.</td>
                   <td className="px-4 py-2.5">
@@ -121,7 +134,7 @@ export default function FittingsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
               )}
             </tbody>
           </table>
@@ -143,6 +156,19 @@ export default function FittingsPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Артикул</label>
               <Input className="bg-white text-slate-800 border-slate-300" value={form.sku ?? ""} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                value={form.group_id ?? ""}
+                onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— без группы —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Единица измерения</label>

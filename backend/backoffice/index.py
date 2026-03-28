@@ -40,6 +40,35 @@ def parse_body(event):
     return json.loads(body)
 
 
+# ========== GROUPS ==========
+def list_groups(cur, entity_type=None):
+    if entity_type:
+        cur.execute(f"SELECT * FROM {SCHEMA}.groups WHERE entity_type=%s ORDER BY sort_order, name", (entity_type,))
+    else:
+        cur.execute(f"SELECT * FROM {SCHEMA}.groups ORDER BY entity_type, sort_order, name")
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def create_group(cur, data):
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.groups (entity_type, name, sort_order) VALUES (%s,%s,%s) RETURNING *",
+        (data["entity_type"], data["name"], data.get("sort_order", 0))
+    )
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, cur.fetchone()))
+
+
+def update_group(cur, gid, data):
+    cur.execute(
+        f"UPDATE {SCHEMA}.groups SET name=%s, sort_order=%s WHERE id=%s RETURNING *",
+        (data["name"], data.get("sort_order", 0), gid)
+    )
+    cols = [d[0] for d in cur.description]
+    row = cur.fetchone()
+    return dict(zip(cols, row)) if row else None
+
+
 # ========== UNITS ==========
 def list_units(cur):
     cur.execute(f"SELECT * FROM {SCHEMA}.units ORDER BY is_default DESC, name")
@@ -75,15 +104,20 @@ def list_warehouses(cur):
 
 # ========== CLIENTS ==========
 def list_clients(cur):
-    cur.execute(f"SELECT * FROM {SCHEMA}.clients ORDER BY name")
+    cur.execute(f"""
+        SELECT c.*, g.name as group_name
+        FROM {SCHEMA}.clients c
+        LEFT JOIN {SCHEMA}.groups g ON c.group_id = g.id
+        ORDER BY c.name
+    """)
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def create_client(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.clients (name, org, phone, email, inn, address, notes) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *",
-        (data.get("name"), data.get("org"), data.get("phone"), data.get("email"), data.get("inn"), data.get("address"), data.get("notes"))
+        f"INSERT INTO {SCHEMA}.clients (name, org, phone, email, inn, address, notes, group_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+        (data.get("name"), data.get("org"), data.get("phone"), data.get("email"), data.get("inn"), data.get("address"), data.get("notes"), data.get("group_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -91,8 +125,8 @@ def create_client(cur, data):
 
 def update_client(cur, cid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.clients SET name=%s, org=%s, phone=%s, email=%s, inn=%s, address=%s, notes=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data.get("name"), data.get("org"), data.get("phone"), data.get("email"), data.get("inn"), data.get("address"), data.get("notes"), cid)
+        f"UPDATE {SCHEMA}.clients SET name=%s, org=%s, phone=%s, email=%s, inn=%s, address=%s, notes=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
+        (data.get("name"), data.get("org"), data.get("phone"), data.get("email"), data.get("inn"), data.get("address"), data.get("notes"), data.get("group_id"), cid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -101,15 +135,20 @@ def update_client(cur, cid, data):
 
 # ========== WORKERS ==========
 def list_workers(cur):
-    cur.execute(f"SELECT * FROM {SCHEMA}.workers ORDER BY full_name")
+    cur.execute(f"""
+        SELECT w.*, g.name as group_name
+        FROM {SCHEMA}.workers w
+        LEFT JOIN {SCHEMA}.groups g ON w.group_id = g.id
+        ORDER BY w.full_name
+    """)
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def create_worker(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.workers (tab_number, full_name, position, phone) VALUES (%s,%s,%s,%s) RETURNING *",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"))
+        f"INSERT INTO {SCHEMA}.workers (tab_number, full_name, position, phone, group_id) VALUES (%s,%s,%s,%s,%s) RETURNING *",
+        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("group_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -117,8 +156,8 @@ def create_worker(cur, data):
 
 def update_worker(cur, wid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s, is_active=%s WHERE id=%s RETURNING *",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("is_active", True), wid)
+        f"UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s, is_active=%s, group_id=%s WHERE id=%s RETURNING *",
+        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("is_active", True), data.get("group_id"), wid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -128,9 +167,10 @@ def update_worker(cur, wid, data):
 # ========== MATERIALS ==========
 def list_materials(cur):
     cur.execute(f"""
-        SELECT m.*, u.name as unit_name, u.short_name as unit_short
+        SELECT m.*, u.name as unit_name, u.short_name as unit_short, g.name as group_name
         FROM {SCHEMA}.materials m
         LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+        LEFT JOIN {SCHEMA}.groups g ON m.group_id = g.id
         ORDER BY m.name
     """)
     cols = [d[0] for d in cur.description]
@@ -139,8 +179,8 @@ def list_materials(cur):
 
 def create_material(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.materials (name, sku, unit_id, price_per_unit, description) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"))
+        f"INSERT INTO {SCHEMA}.materials (name, sku, unit_id, price_per_unit, description, group_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("group_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -148,8 +188,8 @@ def create_material(cur, data):
 
 def update_material(cur, mid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.materials SET name=%s, sku=%s, unit_id=%s, price_per_unit=%s, description=%s, is_active=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("is_active", True), mid)
+        f"UPDATE {SCHEMA}.materials SET name=%s, sku=%s, unit_id=%s, price_per_unit=%s, description=%s, is_active=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
+        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("is_active", True), data.get("group_id"), mid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -159,9 +199,10 @@ def update_material(cur, mid, data):
 # ========== FITTINGS ==========
 def list_fittings(cur):
     cur.execute(f"""
-        SELECT f.*, u.name as unit_name, u.short_name as unit_short
+        SELECT f.*, u.name as unit_name, u.short_name as unit_short, g.name as group_name
         FROM {SCHEMA}.fittings f
         LEFT JOIN {SCHEMA}.units u ON f.unit_id = u.id
+        LEFT JOIN {SCHEMA}.groups g ON f.group_id = g.id
         ORDER BY f.name
     """)
     cols = [d[0] for d in cur.description]
@@ -170,8 +211,8 @@ def list_fittings(cur):
 
 def create_fitting(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.fittings (name, sku, unit_id, price_per_unit, description) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"))
+        f"INSERT INTO {SCHEMA}.fittings (name, sku, unit_id, price_per_unit, description, group_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("group_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -179,8 +220,8 @@ def create_fitting(cur, data):
 
 def update_fitting(cur, fid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.fittings SET name=%s, sku=%s, unit_id=%s, price_per_unit=%s, description=%s, is_active=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("is_active", True), fid)
+        f"UPDATE {SCHEMA}.fittings SET name=%s, sku=%s, unit_id=%s, price_per_unit=%s, description=%s, is_active=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
+        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("is_active", True), data.get("group_id"), fid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -189,15 +230,20 @@ def update_fitting(cur, fid, data):
 
 # ========== OPERATIONS ==========
 def list_operations(cur):
-    cur.execute(f"SELECT * FROM {SCHEMA}.operations ORDER BY sort_order, name")
+    cur.execute(f"""
+        SELECT o.*, g.name as group_name
+        FROM {SCHEMA}.operations o
+        LEFT JOIN {SCHEMA}.groups g ON o.group_id = g.id
+        ORDER BY o.sort_order, o.name
+    """)
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def create_operation(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.operations (name, description, has_material_norm, default_price, sort_order) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-        (data["name"], data.get("description"), data.get("has_material_norm", False), data.get("default_price", 0), data.get("sort_order", 0))
+        f"INSERT INTO {SCHEMA}.operations (name, description, has_material_norm, default_price, sort_order, group_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("description"), data.get("has_material_norm", False), data.get("default_price", 0), data.get("sort_order", 0), data.get("group_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -205,8 +251,8 @@ def create_operation(cur, data):
 
 def update_operation(cur, oid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.operations SET name=%s, description=%s, has_material_norm=%s, default_price=%s, sort_order=%s, is_active=%s WHERE id=%s RETURNING *",
-        (data["name"], data.get("description"), data.get("has_material_norm", False), data.get("default_price", 0), data.get("sort_order", 0), data.get("is_active", True), oid)
+        f"UPDATE {SCHEMA}.operations SET name=%s, description=%s, has_material_norm=%s, default_price=%s, sort_order=%s, is_active=%s, group_id=%s WHERE id=%s RETURNING *",
+        (data["name"], data.get("description"), data.get("has_material_norm", False), data.get("default_price", 0), data.get("sort_order", 0), data.get("is_active", True), data.get("group_id"), oid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -698,7 +744,9 @@ def handler(event, context):
 
     try:
         if method == "GET":
-            if entity == "units":
+            if entity == "groups":
+                return ok(list_groups(cur, qs.get("entity_type")))
+            elif entity == "units":
                 return ok(list_units(cur))
             elif entity == "warehouses":
                 return ok(list_warehouses(cur))
@@ -731,12 +779,14 @@ def handler(event, context):
             elif entity == "report_cost" and qs.get("order_id"):
                 return ok(report_cost(cur, int(qs["order_id"])))
             else:
-                return ok({"entities": ["units","warehouses","clients","workers","materials","fittings","operations","semi_products","finished_products","stock","stock_movements","orders","work_orders","pending_operations","report_overconsumption","report_cost"]})
+                return ok({"entities": ["groups","units","warehouses","clients","workers","materials","fittings","operations","semi_products","finished_products","stock","stock_movements","orders","work_orders","pending_operations","report_overconsumption","report_cost"]})
 
         data = parse_body(event)
 
         if method == "POST":
-            if entity == "units":
+            if entity == "groups":
+                result = create_group(cur, data)
+            elif entity == "units":
                 result = create_unit(cur, data)
             elif entity == "clients":
                 result = create_client(cur, data)
@@ -769,7 +819,9 @@ def handler(event, context):
             item_id = int(qs.get("id", 0) or data.get("id", 0))
             if not item_id:
                 return err("id required")
-            if entity == "units":
+            if entity == "groups":
+                result = update_group(cur, item_id, data)
+            elif entity == "units":
                 result = update_unit(cur, item_id, data)
             elif entity == "clients":
                 result = update_client(cur, item_id, data)

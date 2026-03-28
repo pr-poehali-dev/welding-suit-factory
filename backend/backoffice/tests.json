@@ -9,6 +9,20 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "List groups",
+      "method": "GET",
+      "path": "/?entity=groups",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List groups by type",
+      "method": "GET",
+      "path": "/?entity=groups&entity_type=materials",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "List units",
       "method": "GET",
       "path": "/?entity=units",

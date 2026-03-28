@@ -5,6 +5,16 @@
 export const BACKOFFICE_API =
   "https://functions.poehali.dev/1ab6512a-2f81-431f-a593-c6a9b944fe39";
 
+// -------------------- группы --------------------
+
+export interface Group {
+  id: number;
+  entity_type: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
 // -------------------- справочники --------------------
 
 export interface Unit {
@@ -33,6 +43,8 @@ export interface Client {
   inn: string;
   address: string;
   notes: string;
+  group_id: number | null;
+  group_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +56,8 @@ export interface Worker {
   position: string;
   phone: string;
   is_active: boolean;
+  group_id: number | null;
+  group_name?: string;
   created_at: string;
 }
 
@@ -57,6 +71,8 @@ export interface Material {
   price_per_unit: number;
   description: string;
   is_active: boolean;
+  group_id: number | null;
+  group_name?: string;
   unit_name?: string;
   unit_short?: string;
   created_at: string;
@@ -71,6 +87,8 @@ export interface Fitting {
   price_per_unit: number;
   description: string;
   is_active: boolean;
+  group_id: number | null;
+  group_name?: string;
   unit_name?: string;
   unit_short?: string;
   created_at: string;
@@ -87,6 +105,8 @@ export interface Operation {
   default_price: number;
   sort_order: number;
   is_active: boolean;
+  group_id: number | null;
+  group_name?: string;
   created_at: string;
 }
 

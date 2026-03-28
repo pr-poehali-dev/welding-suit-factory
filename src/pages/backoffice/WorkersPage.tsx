@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { boFetch, Worker } from "@/pages/backoffice/types";
+import { boFetch, Worker, Group } from "@/pages/backoffice/types";
+import GroupManager from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +15,19 @@ import {
 } from "@/components/ui/dialog";
 
 const EMPTY: Partial<Worker> = {
-  tab_number: "", full_name: "", position: "", phone: "", is_active: true,
+  tab_number: "", full_name: "", position: "", phone: "", is_active: true, group_id: null,
 };
 
 export default function WorkersPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<Worker>>(EMPTY);
+  const [groupFilter, setGroupFilter] = useState<number | null>(null);
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["bo-groups", "workers"],
+    queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "workers" }),
+  });
 
   const { data: workers = [], isLoading } = useQuery<Worker[]>({
     queryKey: ["bo-workers"],
@@ -53,6 +60,8 @@ export default function WorkersPage() {
   const f = (key: keyof Worker) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [key]: e.target.value });
 
+  const filtered = workers.filter((w) => groupFilter === null || w.group_id === groupFilter);
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -61,6 +70,8 @@ export default function WorkersPage() {
           <Icon name="Plus" size={16} /> Добавить
         </Button>
       </div>
+
+      <GroupManager entityType="workers" selectedGroupId={groupFilter} onSelect={setGroupFilter} />
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
@@ -72,17 +83,19 @@ export default function WorkersPage() {
                 <th className="px-4 py-3">Таб. номер</th>
                 <th className="px-4 py-3">ФИО</th>
                 <th className="px-4 py-3">Должность</th>
+                <th className="px-4 py-3">Группа</th>
                 <th className="px-4 py-3">Телефон</th>
                 <th className="px-4 py-3">Активен</th>
                 <th className="px-4 py-3 text-right">Действия</th>
               </tr>
             </thead>
             <tbody>
-              {workers.map((w, i) => (
+              {filtered.map((w, i) => (
                 <tr key={w.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                   <td className="px-4 py-2.5 font-mono text-slate-600">{w.tab_number}</td>
                   <td className="px-4 py-2.5 font-medium text-slate-700">{w.full_name}</td>
                   <td className="px-4 py-2.5 text-slate-600">{w.position}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{w.group_name || "—"}</td>
                   <td className="px-4 py-2.5 text-slate-600">{w.phone || "-"}</td>
                   <td className="px-4 py-2.5">
                     {w.is_active ? (
@@ -103,8 +116,8 @@ export default function WorkersPage() {
                   </td>
                 </tr>
               ))}
-              {workers.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
               )}
             </tbody>
           </table>
@@ -130,6 +143,19 @@ export default function WorkersPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Должность</label>
               <Input className="bg-white text-slate-800 border-slate-300" value={form.position ?? ""} onChange={f("position")} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                value={form.group_id ?? ""}
+                onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— без группы —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Телефон</label>
