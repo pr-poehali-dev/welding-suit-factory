@@ -43,9 +43,9 @@ def parse_body(event):
 # ========== GROUPS ==========
 def list_groups(cur, entity_type=None):
     if entity_type:
-        cur.execute(f"SELECT * FROM {SCHEMA}.groups WHERE entity_type=%s ORDER BY sort_order, name", (entity_type,))
+        cur.execute(f"SELECT * FROM {SCHEMA}.groups WHERE entity_type=%s AND is_active=true ORDER BY sort_order, name", (entity_type,))
     else:
-        cur.execute(f"SELECT * FROM {SCHEMA}.groups ORDER BY entity_type, sort_order, name")
+        cur.execute(f"SELECT * FROM {SCHEMA}.groups WHERE is_active=true ORDER BY entity_type, sort_order, name")
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
@@ -67,6 +67,16 @@ def update_group(cur, gid, data):
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
     return dict(zip(cols, row)) if row else None
+
+
+def delete_group(cur, gid):
+    for tbl in ("materials", "fittings", "operations", "clients", "workers"):
+        cur.execute(f"UPDATE {SCHEMA}.{tbl} SET group_id = NULL WHERE group_id = %s", (gid,))
+    cur.execute(f"UPDATE {SCHEMA}.groups SET is_active = false WHERE id=%s RETURNING id", (gid,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {"deleted": gid}
 
 
 # ========== UNITS ==========
@@ -841,6 +851,20 @@ def handler(event, context):
                 result = update_order_status(cur, item_id, data.get("status"))
             else:
                 return err("Unknown entity for PUT")
+            conn.commit()
+            if result is None:
+                return err("Not found", 404)
+            return ok(result)
+
+        if method == "DELETE":
+            data = parse_body(event)
+            item_id = int(qs.get("id", 0) or data.get("id", 0))
+            if not item_id:
+                return err("id required")
+            if entity == "groups":
+                result = delete_group(cur, item_id)
+            else:
+                return err("Unknown entity for DELETE")
             conn.commit()
             if result is None:
                 return err("Not found", 404)

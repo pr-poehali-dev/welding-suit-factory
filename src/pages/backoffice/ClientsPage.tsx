@@ -66,9 +66,18 @@ export default function ClientsPage() {
       c.org.toLowerCase().includes(q) ||
       c.phone.includes(q) ||
       c.inn.includes(q);
-    const matchGroup = groupFilter === null || c.group_id === groupFilter;
+    const matchGroup = groupFilter === null || (groupFilter === -1 ? !c.group_id : c.group_id === groupFilter);
     return matchSearch && matchGroup;
   });
+
+  const groupCounts = (() => {
+    const c: Record<number | string, number> = { all: clients.length, ungrouped: 0 };
+    clients.forEach((cl) => {
+      if (cl.group_id) c[cl.group_id] = (c[cl.group_id] || 0) + 1;
+      else c["ungrouped"] = (c["ungrouped"] || 0) + 1;
+    });
+    return c;
+  })();
 
   const f = (key: keyof Client) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [key]: e.target.value });
@@ -90,52 +99,54 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      <GroupManager entityType="clients" selectedGroupId={groupFilter} onSelect={setGroupFilter} />
+      <div className="flex gap-4">
+        <GroupManager entityType="clients" selectedGroupId={groupFilter} onSelect={setGroupFilter} counts={groupCounts} />
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-4 py-3">Название</th>
-                <th className="px-4 py-3">Группа</th>
-                <th className="px-4 py-3">Организация</th>
-                <th className="px-4 py-3">Телефон</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">ИНН</th>
-                <th className="px-4 py-3 text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c, i) => (
-                <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                  <td className="px-4 py-2.5 font-medium text-slate-700">{c.name}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{c.group_name || "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{c.org || "-"}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{c.phone || "-"}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{c.email || "-"}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{c.inn || "-"}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
-                        <Icon name="Pencil" size={15} />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remove.mutate(c.id)}>
-                        <Icon name="Trash2" size={15} className="text-red-500" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="flex-1 min-w-0">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-3">Название</th>
+                    <th className="px-4 py-3">Организация</th>
+                    <th className="px-4 py-3">Телефон</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">ИНН</th>
+                    <th className="px-4 py-3 text-right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((c, i) => (
+                    <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{c.name}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{c.org || "-"}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{c.phone || "-"}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{c.email || "-"}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{c.inn || "-"}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
+                            <Icon name="Pencil" size={15} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => remove.mutate(c.id)}>
+                            <Icon name="Trash2" size={15} className="text-red-500" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* --- Dialog --- */}
       <Dialog open={open} onOpenChange={setOpen}>

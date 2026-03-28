@@ -1,0 +1,1 @@
+ALTER TABLE t_p87775074_welding_suit_factory.groups ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true;

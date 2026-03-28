@@ -17,9 +17,10 @@ interface GroupManagerProps {
   entityType: string;
   selectedGroupId: number | null;
   onSelect: (groupId: number | null) => void;
+  counts?: Record<number | string, number>;
 }
 
-export default function GroupManager({ entityType, selectedGroupId, onSelect }: GroupManagerProps) {
+export default function GroupManager({ entityType, selectedGroupId, onSelect, counts = {} }: GroupManagerProps) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<Group | null>(null);
@@ -43,16 +44,34 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect }: 
     onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
   });
 
+  const del = useMutation({
+    mutationFn: (id: number) => boFetch("groups", "DELETE", { id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bo-groups", entityType] });
+      onSelect(null);
+      toast({ title: "Группа удалена" });
+    },
+    onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+  });
+
   const openNew = () => {
     setEditGroup(null);
     setName("");
     setOpen(true);
   };
 
-  const openEdit = (g: Group) => {
+  const openEdit = (g: Group, e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditGroup(g);
     setName(g.name);
     setOpen(true);
+  };
+
+  const handleDelete = (g: Group, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Удалить группу «${g.name}»? Записи останутся без группы.`)) {
+      del.mutate(g.id);
+    }
   };
 
   const handleSave = () => {
@@ -64,49 +83,95 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect }: 
     });
   };
 
+  const totalCount = counts["all"] ?? 0;
+  const ungroupedCount = counts["ungrouped"] ?? 0;
+
   return (
-    <div className="mb-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant={selectedGroupId === null ? "default" : "outline"}
-          size="sm"
-          onClick={() => onSelect(null)}
-          className={selectedGroupId === null
-            ? "bg-blue-600 hover:bg-blue-700 text-white"
-            : "text-slate-600 border-slate-300"}
-        >
-          Все
-        </Button>
-        {groups.map((g) => (
-          <div key={g.id} className="flex items-center gap-0.5">
-            <Button
-              variant={selectedGroupId === g.id ? "default" : "outline"}
-              size="sm"
+    <div className="w-56 shrink-0">
+      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+        <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Группы</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-slate-400 hover:text-blue-600"
+            onClick={openNew}
+          >
+            <Icon name="Plus" size={14} />
+          </Button>
+        </div>
+
+        <div className="py-1">
+          <button
+            onClick={() => onSelect(null)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+              selectedGroupId === null
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Icon name="List" size={15} />
+              Все
+            </span>
+            {totalCount > 0 && (
+              <span className="text-xs text-slate-400">{totalCount}</span>
+            )}
+          </button>
+
+          {groups.map((g) => (
+            <div
+              key={g.id}
               onClick={() => onSelect(g.id)}
-              className={selectedGroupId === g.id
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "text-slate-600 border-slate-300"}
+              className={`group w-full flex items-center justify-between px-3 py-2 text-sm cursor-pointer transition-colors ${
+                selectedGroupId === g.id
+                  ? "bg-blue-50 text-blue-700 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
             >
-              {g.name}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600"
-              onClick={(e) => { e.stopPropagation(); openEdit(g); }}
+              <span className="flex items-center gap-2 truncate">
+                <Icon name="Folder" size={15} />
+                <span className="truncate">{g.name}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                {(counts[g.id] ?? 0) > 0 && (
+                  <span className="text-xs text-slate-400">{counts[g.id]}</span>
+                )}
+                <span className="hidden group-hover:flex items-center gap-0.5">
+                  <button
+                    onClick={(e) => openEdit(g, e)}
+                    className="p-0.5 text-slate-400 hover:text-blue-600 rounded"
+                  >
+                    <Icon name="Pencil" size={12} />
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(g, e)}
+                    className="p-0.5 text-slate-400 hover:text-red-500 rounded"
+                  >
+                    <Icon name="Trash2" size={12} />
+                  </button>
+                </span>
+              </span>
+            </div>
+          ))}
+
+          {ungroupedCount > 0 && groups.length > 0 && (
+            <button
+              onClick={() => onSelect(-1)}
+              className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                selectedGroupId === -1
+                  ? "bg-blue-50 text-blue-700 font-medium"
+                  : "text-slate-400 hover:bg-slate-50"
+              }`}
             >
-              <Icon name="Pencil" size={12} />
-            </Button>
-          </div>
-        ))}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={openNew}
-          className="gap-1 text-slate-500 border-dashed border-slate-300 hover:border-slate-400"
-        >
-          <Icon name="Plus" size={14} /> Группа
-        </Button>
+              <span className="flex items-center gap-2">
+                <Icon name="FolderOpen" size={15} />
+                Без группы
+              </span>
+              <span className="text-xs text-slate-400">{ungroupedCount}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

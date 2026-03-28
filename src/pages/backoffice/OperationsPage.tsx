@@ -59,11 +59,20 @@ export default function OperationsPage() {
   const openEdit = (o: Operation) => { setForm({ ...o }); setOpen(true); };
 
   const filtered = operations.filter((o) => {
-    const matchGroup = groupFilter === null || o.group_id === groupFilter;
+    const matchGroup = groupFilter === null || (groupFilter === -1 ? !o.group_id : o.group_id === groupFilter);
     return matchGroup;
   });
 
   const sorted = [...filtered].sort((a, b) => a.sort_order - b.sort_order);
+
+  const groupCounts = (() => {
+    const c: Record<number | string, number> = { all: operations.length, ungrouped: 0 };
+    operations.forEach((o) => {
+      if (o.group_id) c[o.group_id] = (c[o.group_id] || 0) + 1;
+      else c["ungrouped"] = (c["ungrouped"] || 0) + 1;
+    });
+    return c;
+  })();
 
   return (
     <div>
@@ -74,66 +83,68 @@ export default function OperationsPage() {
         </Button>
       </div>
 
-      <GroupManager entityType="operations" selectedGroupId={groupFilter} onSelect={setGroupFilter} />
+      <div className="flex gap-4">
+        <GroupManager entityType="operations" selectedGroupId={groupFilter} onSelect={setGroupFilter} counts={groupCounts} />
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-4 py-3 w-12">#</th>
-                <th className="px-4 py-3">Название</th>
-                <th className="px-4 py-3">Группа</th>
-                <th className="px-4 py-3">Описание</th>
-                <th className="px-4 py-3">Норма расхода</th>
-                <th className="px-4 py-3">Стоимость</th>
-                <th className="px-4 py-3">Активен</th>
-                <th className="px-4 py-3 text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((o, i) => (
-                <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                  <td className="px-4 py-2.5 text-slate-400">{o.sort_order}</td>
-                  <td className="px-4 py-2.5 font-medium text-slate-700">{o.name}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{o.group_name || "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-600 max-w-xs truncate">{o.description || "-"}</td>
-                  <td className="px-4 py-2.5">
-                    {o.has_material_norm ? (
-                      <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Да</span>
-                    ) : (
-                      <span className="text-xs text-slate-400">Нет</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600">{Number(o.default_price).toLocaleString("ru")} r.</td>
-                  <td className="px-4 py-2.5">
-                    {o.is_active ? (
-                      <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
-                    ) : (
-                      <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(o)}>
-                        <Icon name="Pencil" size={15} />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remove.mutate(o.id)}>
-                        <Icon name="Trash2" size={15} className="text-red-500" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {sorted.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="flex-1 min-w-0">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-3 w-12">#</th>
+                    <th className="px-4 py-3">Название</th>
+                    <th className="px-4 py-3">Описание</th>
+                    <th className="px-4 py-3">Норма расхода</th>
+                    <th className="px-4 py-3">Стоимость</th>
+                    <th className="px-4 py-3">Активен</th>
+                    <th className="px-4 py-3 text-right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((o, i) => (
+                    <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                      <td className="px-4 py-2.5 text-slate-400">{o.sort_order}</td>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{o.name}</td>
+                      <td className="px-4 py-2.5 text-slate-600 max-w-xs truncate">{o.description || "-"}</td>
+                      <td className="px-4 py-2.5">
+                        {o.has_material_norm ? (
+                          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Да</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Нет</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">{Number(o.default_price).toLocaleString("ru")} r.</td>
+                      <td className="px-4 py-2.5">
+                        {o.is_active ? (
+                          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
+                        ) : (
+                          <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(o)}>
+                            <Icon name="Pencil" size={15} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => remove.mutate(o.id)}>
+                            <Icon name="Trash2" size={15} className="text-red-500" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {sorted.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* --- Dialog --- */}
       <Dialog open={open} onOpenChange={setOpen}>
