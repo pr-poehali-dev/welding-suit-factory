@@ -1,0 +1,75 @@
+{
+  "tests": [
+    {
+      "name": "List entities index",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List units",
+      "method": "GET",
+      "path": "/?entity=units",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List warehouses",
+      "method": "GET",
+      "path": "/?entity=warehouses",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List workers",
+      "method": "GET",
+      "path": "/?entity=workers",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List materials",
+      "method": "GET",
+      "path": "/?entity=materials",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List operations",
+      "method": "GET",
+      "path": "/?entity=operations",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List orders",
+      "method": "GET",
+      "path": "/?entity=orders",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List stock",
+      "method": "GET",
+      "path": "/?entity=stock",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Pending operations",
+      "method": "GET",
+      "path": "/?entity=pending_operations",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Overconsumption report",
+      "method": "GET",
+      "path": "/?entity=report_overconsumption",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
