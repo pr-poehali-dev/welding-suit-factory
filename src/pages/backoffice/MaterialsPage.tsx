@@ -23,6 +23,8 @@ export default function MaterialsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<Material>>(EMPTY);
   const [search, setSearch] = useState("");
+  const [unitOpen, setUnitOpen] = useState(false);
+  const [unitForm, setUnitForm] = useState({ name: "", short_name: "" });
 
   const { data: materials = [], isLoading } = useQuery<Material[]>({
     queryKey: ["bo-materials"],
