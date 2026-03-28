@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { boFetch, Fitting, Unit, Group } from "@/pages/backoffice/types";
-import GroupManager from "@/components/backoffice/GroupManager";
+import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,10 +64,27 @@ export default function FittingsPage() {
   const openNew = () => { setForm({ ...EMPTY, unit_id: units[0]?.id ?? 0 }); setOpen(true); };
   const openEdit = (f: Fitting) => { setForm({ ...f }); setOpen(true); };
 
+  const tree = buildTree(groups);
+  function findNode(nodes: TreeGroup[], id: number): TreeGroup | null {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNode(n.children, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
   const filtered = fittings.filter((f) => {
     const q = search.toLowerCase();
     const matchSearch = f.name.toLowerCase().includes(q) || f.sku.toLowerCase().includes(q);
-    const matchGroup = groupFilter === null || (groupFilter === -1 ? !f.group_id : f.group_id === groupFilter);
+    const matchGroup = (() => {
+      if (groupFilter === null) return true;
+      if (groupFilter === -1) return !f.group_id;
+      const node = findNode(tree, groupFilter);
+      if (!node) return f.group_id === groupFilter;
+      const ids = collectIds(node);
+      return ids.includes(f.group_id as number);
+    })();
     return matchSearch && matchGroup;
   });
 

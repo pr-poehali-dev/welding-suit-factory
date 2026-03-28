@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { boFetch, Client, Group } from "@/pages/backoffice/types";
-import GroupManager from "@/components/backoffice/GroupManager";
+import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,16 @@ export default function ClientsPage() {
   const openNew = () => { setForm(EMPTY); setOpen(true); };
   const openEdit = (c: Client) => { setForm({ ...c }); setOpen(true); };
 
+  const tree = buildTree(groups);
+  function findNode(nodes: TreeGroup[], id: number): TreeGroup | null {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNode(n.children, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
   const filtered = clients.filter((c) => {
     const q = search.toLowerCase();
     const matchSearch =
@@ -66,7 +76,14 @@ export default function ClientsPage() {
       c.org.toLowerCase().includes(q) ||
       c.phone.includes(q) ||
       c.inn.includes(q);
-    const matchGroup = groupFilter === null || (groupFilter === -1 ? !c.group_id : c.group_id === groupFilter);
+    const matchGroup = (() => {
+      if (groupFilter === null) return true;
+      if (groupFilter === -1) return !c.group_id;
+      const node = findNode(tree, groupFilter);
+      if (!node) return c.group_id === groupFilter;
+      const ids = collectIds(node);
+      return ids.includes(c.group_id as number);
+    })();
     return matchSearch && matchGroup;
   });
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { boFetch, Worker, Group } from "@/pages/backoffice/types";
-import GroupManager from "@/components/backoffice/GroupManager";
+import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,27 @@ export default function WorkersPage() {
   const f = (key: keyof Worker) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [key]: e.target.value });
 
-  const filtered = workers.filter((w) => groupFilter === null || (groupFilter === -1 ? !w.group_id : w.group_id === groupFilter));
+  const tree = buildTree(groups);
+  function findNode(nodes: TreeGroup[], id: number): TreeGroup | null {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNode(n.children, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const filtered = workers.filter((w) => {
+    const matchGroup = (() => {
+      if (groupFilter === null) return true;
+      if (groupFilter === -1) return !w.group_id;
+      const node = findNode(tree, groupFilter);
+      if (!node) return w.group_id === groupFilter;
+      const ids = collectIds(node);
+      return ids.includes(w.group_id as number);
+    })();
+    return matchGroup;
+  });
 
   const groupCounts = (() => {
     const c: Record<number | string, number> = { all: workers.length, ungrouped: 0 };

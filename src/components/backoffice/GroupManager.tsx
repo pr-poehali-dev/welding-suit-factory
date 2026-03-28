@@ -20,25 +20,128 @@ interface GroupManagerProps {
   counts?: Record<number | string, number>;
 }
 
+export type TreeGroup = Group & { children: TreeGroup[] };
+
+export function buildTree(groups: Group[]): TreeGroup[] {
+  const map: Record<number, TreeGroup> = {};
+  groups.forEach((g) => { map[g.id] = { ...g, children: [] }; });
+  const roots: TreeGroup[] = [];
+  groups.forEach((g) => {
+    if (g.parent_id && map[g.parent_id]) {
+      map[g.parent_id].children.push(map[g.id]);
+    } else {
+      roots.push(map[g.id]);
+    }
+  });
+  return roots;
+}
+
+export function collectIds(node: TreeGroup): number[] {
+  let ids = [node.id];
+  node.children.forEach((c) => { ids = ids.concat(collectIds(c)); });
+  return ids;
+}
+
+interface TreeNodeProps {
+  node: TreeGroup;
+  depth: number;
+  selectedGroupId: number | null;
+  onSelect: (id: number) => void;
+  onEdit: (g: Group, e: React.MouseEvent) => void;
+  onDelete: (g: Group, e: React.MouseEvent) => void;
+  onAddChild: (parentId: number, e: React.MouseEvent) => void;
+  counts: Record<number | string, number>;
+  expandedIds: Set<number>;
+  toggleExpand: (id: number) => void;
+}
+
+function TreeNode({ node, depth, selectedGroupId, onSelect, onEdit, onDelete, onAddChild, counts, expandedIds, toggleExpand }: TreeNodeProps) {
+  const hasChildren = node.children.length > 0;
+  const isExpanded = expandedIds.has(node.id);
+  const isSelected = selectedGroupId === node.id;
+  const count = counts[node.id] ?? 0;
+
+  return (
+    <>
+      <div
+        onClick={() => onSelect(node.id)}
+        className={`group/item w-full flex items-center justify-between pr-2 py-1.5 text-sm cursor-pointer transition-colors ${
+          isSelected ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-50"
+        }`}
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+      >
+        <span className="flex items-center gap-1.5 truncate min-w-0">
+          {hasChildren ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
+              className="p-0.5 shrink-0"
+            >
+              <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} />
+            </button>
+          ) : (
+            <span className="w-[18px] shrink-0" />
+          )}
+          <Icon name="Folder" size={14} className="shrink-0" />
+          <span className="truncate">{node.name}</span>
+        </span>
+        <span className="flex items-center gap-1 shrink-0">
+          {count > 0 && <span className="text-xs text-slate-400">{count}</span>}
+          <span className="hidden group-hover/item:flex items-center gap-0.5 ml-1">
+            <button onClick={(e) => onAddChild(node.id, e)} className="p-0.5 text-slate-400 hover:text-green-600 rounded" title="Подгруппа">
+              <Icon name="Plus" size={11} />
+            </button>
+            <button onClick={(e) => onEdit(node, e)} className="p-0.5 text-slate-400 hover:text-blue-600 rounded">
+              <Icon name="Pencil" size={11} />
+            </button>
+            <button onClick={(e) => onDelete(node, e)} className="p-0.5 text-slate-400 hover:text-red-500 rounded">
+              <Icon name="Trash2" size={11} />
+            </button>
+          </span>
+        </span>
+      </div>
+      {isExpanded && node.children.map((child) => (
+        <TreeNode
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          selectedGroupId={selectedGroupId}
+          onSelect={onSelect}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onAddChild={onAddChild}
+          counts={counts}
+          expandedIds={expandedIds}
+          toggleExpand={toggleExpand}
+        />
+      ))}
+    </>
+  );
+}
+
 export default function GroupManager({ entityType, selectedGroupId, onSelect, counts = {} }: GroupManagerProps) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<Group | null>(null);
+  const [parentIdForNew, setParentIdForNew] = useState<number | null>(null);
   const [name, setName] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   const { data: groups = [] } = useQuery<Group[]>({
     queryKey: ["bo-groups", entityType],
     queryFn: () => boFetch("groups", "GET", undefined, { entity_type: entityType }),
   });
 
+  const tree = buildTree(groups);
+
   const save = useMutation({
-    mutationFn: (data: { id?: number; entity_type: string; name: string }) =>
+    mutationFn: (data: { id?: number; entity_type: string; name: string; parent_id?: number | null }) =>
       boFetch("groups", data.id ? "PUT" : "POST", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bo-groups", entityType] });
       toast({ title: "Группа сохранена" });
       setOpen(false);
       setEditGroup(null);
+      setParentIdForNew(null);
       setName("");
     },
     onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
@@ -54,8 +157,17 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
     onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
   });
 
-  const openNew = () => {
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const openNew = (parentId: number | null = null) => {
     setEditGroup(null);
+    setParentIdForNew(parentId);
     setName("");
     setOpen(true);
   };
@@ -63,6 +175,7 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
   const openEdit = (g: Group, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditGroup(g);
+    setParentIdForNew(null);
     setName(g.name);
     setOpen(true);
   };
@@ -74,17 +187,30 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
     }
   };
 
+  const handleAddChild = (parentId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedIds((prev) => new Set(prev).add(parentId));
+    openNew(parentId);
+  };
+
   const handleSave = () => {
     if (!name.trim()) return;
-    save.mutate({
-      ...(editGroup ? { id: editGroup.id } : {}),
+    const payload: { id?: number; entity_type: string; name: string; parent_id?: number | null } = {
       entity_type: entityType,
       name: name.trim(),
-    });
+    };
+    if (editGroup) {
+      payload.id = editGroup.id;
+      payload.parent_id = editGroup.parent_id;
+    } else {
+      payload.parent_id = parentIdForNew;
+    }
+    save.mutate(payload);
   };
 
   const totalCount = counts["all"] ?? 0;
   const ungroupedCount = counts["ungrouped"] ?? 0;
+  const parentName = parentIdForNew ? groups.find((g) => g.id === parentIdForNew)?.name : null;
 
   return (
     <div className="w-56 shrink-0">
@@ -95,16 +221,16 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0 text-slate-400 hover:text-blue-600"
-            onClick={openNew}
+            onClick={() => openNew(null)}
           >
             <Icon name="Plus" size={14} />
           </Button>
         </div>
 
-        <div className="py-1">
+        <div className="py-1 max-h-[60vh] overflow-y-auto">
           <button
             onClick={() => onSelect(null)}
-            className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+            className={`w-full flex items-center justify-between px-3 py-1.5 text-sm transition-colors ${
               selectedGroupId === null
                 ? "bg-blue-50 text-blue-700 font-medium"
                 : "text-slate-600 hover:bg-slate-50"
@@ -114,51 +240,29 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
               <Icon name="List" size={15} />
               Все
             </span>
-            {totalCount > 0 && (
-              <span className="text-xs text-slate-400">{totalCount}</span>
-            )}
+            {totalCount > 0 && <span className="text-xs text-slate-400">{totalCount}</span>}
           </button>
 
-          {groups.map((g) => (
-            <div
-              key={g.id}
-              onClick={() => onSelect(g.id)}
-              className={`group w-full flex items-center justify-between px-3 py-2 text-sm cursor-pointer transition-colors ${
-                selectedGroupId === g.id
-                  ? "bg-blue-50 text-blue-700 font-medium"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <span className="flex items-center gap-2 truncate">
-                <Icon name="Folder" size={15} />
-                <span className="truncate">{g.name}</span>
-              </span>
-              <span className="flex items-center gap-1">
-                {(counts[g.id] ?? 0) > 0 && (
-                  <span className="text-xs text-slate-400">{counts[g.id]}</span>
-                )}
-                <span className="hidden group-hover:flex items-center gap-0.5">
-                  <button
-                    onClick={(e) => openEdit(g, e)}
-                    className="p-0.5 text-slate-400 hover:text-blue-600 rounded"
-                  >
-                    <Icon name="Pencil" size={12} />
-                  </button>
-                  <button
-                    onClick={(e) => handleDelete(g, e)}
-                    className="p-0.5 text-slate-400 hover:text-red-500 rounded"
-                  >
-                    <Icon name="Trash2" size={12} />
-                  </button>
-                </span>
-              </span>
-            </div>
+          {tree.map((node) => (
+            <TreeNode
+              key={node.id}
+              node={node}
+              depth={0}
+              selectedGroupId={selectedGroupId}
+              onSelect={onSelect}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onAddChild={handleAddChild}
+              counts={counts}
+              expandedIds={expandedIds}
+              toggleExpand={toggleExpand}
+            />
           ))}
 
           {ungroupedCount > 0 && groups.length > 0 && (
             <button
               onClick={() => onSelect(-1)}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-sm transition-colors ${
                 selectedGroupId === -1
                   ? "bg-blue-50 text-blue-700 font-medium"
                   : "text-slate-400 hover:bg-slate-50"
@@ -177,7 +281,9 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm bg-white text-slate-800">
           <DialogHeader>
-            <DialogTitle>{editGroup ? "Редактировать группу" : "Новая группа"}</DialogTitle>
+            <DialogTitle>
+              {editGroup ? "Редактировать группу" : parentName ? `Подгруппа в «${parentName}»` : "Новая группа"}
+            </DialogTitle>
           </DialogHeader>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600">Название</label>
@@ -200,3 +306,6 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
     </div>
   );
 }
+
+export { buildTree, collectIds };
+export type { TreeGroup };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { boFetch, Material, Unit, Group } from "@/pages/backoffice/types";
-import GroupManager from "@/components/backoffice/GroupManager";
+import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,10 +66,27 @@ export default function MaterialsPage() {
   const openNew = () => { setForm({ ...EMPTY, unit_id: units[0]?.id ?? 0 }); setOpen(true); };
   const openEdit = (m: Material) => { setForm({ ...m }); setOpen(true); };
 
+  const tree = buildTree(groups);
+  function findNode(nodes: TreeGroup[], id: number): TreeGroup | null {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNode(n.children, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
   const filtered = materials.filter((m) => {
     const q = search.toLowerCase();
     const matchSearch = m.name.toLowerCase().includes(q) || m.sku.toLowerCase().includes(q);
-    const matchGroup = groupFilter === null || (groupFilter === -1 ? !m.group_id : m.group_id === groupFilter);
+    const matchGroup = (() => {
+      if (groupFilter === null) return true;
+      if (groupFilter === -1) return !m.group_id;
+      const node = findNode(tree, groupFilter);
+      if (!node) return m.group_id === groupFilter;
+      const ids = collectIds(node);
+      return ids.includes(m.group_id as number);
+    })();
     return matchSearch && matchGroup;
   });
 

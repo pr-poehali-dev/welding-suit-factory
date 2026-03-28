@@ -52,8 +52,8 @@ def list_groups(cur, entity_type=None):
 
 def create_group(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.groups (entity_type, name, sort_order) VALUES (%s,%s,%s) RETURNING *",
-        (data["entity_type"], data["name"], data.get("sort_order", 0))
+        f"INSERT INTO {SCHEMA}.groups (entity_type, name, sort_order, parent_id) VALUES (%s,%s,%s,%s) RETURNING *",
+        (data["entity_type"], data["name"], data.get("sort_order", 0), data.get("parent_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -61,8 +61,8 @@ def create_group(cur, data):
 
 def update_group(cur, gid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.groups SET name=%s, sort_order=%s WHERE id=%s RETURNING *",
-        (data["name"], data.get("sort_order", 0), gid)
+        f"UPDATE {SCHEMA}.groups SET name=%s, sort_order=%s, parent_id=%s WHERE id=%s RETURNING *",
+        (data["name"], data.get("sort_order", 0), data.get("parent_id"), gid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -70,13 +70,27 @@ def update_group(cur, gid, data):
 
 
 def delete_group(cur, gid):
-    for tbl in ("materials", "fittings", "operations", "clients", "workers"):
+    for tbl in ("materials", "fittings", "operations", "clients", "workers", "semi_products", "finished_products"):
         cur.execute(f"UPDATE {SCHEMA}.{tbl} SET group_id = NULL WHERE group_id = %s", (gid,))
+    cur.execute(f"UPDATE {SCHEMA}.groups SET parent_id = NULL WHERE parent_id = %s", (gid,))
     cur.execute(f"UPDATE {SCHEMA}.groups SET is_active = false WHERE id=%s RETURNING id", (gid,))
     row = cur.fetchone()
     if not row:
         return None
     return {"deleted": gid}
+
+
+def get_group_descendants(cur, group_id):
+    """Возвращает список id группы + всех потомков (рекурсивно)"""
+    cur.execute(f"""
+        WITH RECURSIVE tree AS (
+            SELECT id FROM {SCHEMA}.groups WHERE id=%s AND is_active=true
+            UNION ALL
+            SELECT g.id FROM {SCHEMA}.groups g JOIN tree t ON g.parent_id = t.id WHERE g.is_active=true
+        )
+        SELECT id FROM tree
+    """, (group_id,))
+    return [r[0] for r in cur.fetchall()]
 
 
 # ========== UNITS ==========
@@ -271,7 +285,12 @@ def update_operation(cur, oid, data):
 
 # ========== SEMI PRODUCTS ==========
 def list_semi_products(cur):
-    cur.execute(f"SELECT * FROM {SCHEMA}.semi_products ORDER BY name")
+    cur.execute(f"""
+        SELECT sp.*, g.name as group_name
+        FROM {SCHEMA}.semi_products sp
+        LEFT JOIN {SCHEMA}.groups g ON sp.group_id = g.id
+        ORDER BY sp.name
+    """)
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for row in rows:
@@ -297,8 +316,8 @@ def list_semi_products(cur):
 
 def create_semi_product(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description) VALUES (%s,%s,%s) RETURNING *",
-        (data["name"], data.get("sku"), data.get("description"))
+        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id) VALUES (%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("sku"), data.get("description"), data.get("group_id"))
     )
     cols = [d[0] for d in cur.description]
     sp = dict(zip(cols, cur.fetchone()))
@@ -317,8 +336,8 @@ def create_semi_product(cur, data):
 
 def update_semi_product(cur, spid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.semi_products SET name=%s, sku=%s, description=%s, is_active=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data["name"], data.get("sku"), data.get("description"), data.get("is_active", True), spid)
+        f"UPDATE {SCHEMA}.semi_products SET name=%s, sku=%s, description=%s, is_active=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
+        (data["name"], data.get("sku"), data.get("description"), data.get("is_active", True), data.get("group_id"), spid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -360,7 +379,13 @@ def update_semi_product(cur, spid, data):
 
 # ========== FINISHED PRODUCTS ==========
 def list_finished_products(cur):
-    cur.execute(f"SELECT * FROM {SCHEMA}.finished_products ORDER BY name")
+    cur.execute(f"""
+        SELECT fp.*, g.name as group_name, p.category as catalog_category
+        FROM {SCHEMA}.finished_products fp
+        LEFT JOIN {SCHEMA}.groups g ON fp.group_id = g.id
+        LEFT JOIN {SCHEMA}.products p ON fp.catalog_product_id = p.id
+        ORDER BY fp.name, fp.size_label
+    """)
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for row in rows:
@@ -385,8 +410,8 @@ def list_finished_products(cur):
 
 def create_finished_product(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.finished_products (name, sku, description, base_price) VALUES (%s,%s,%s,%s) RETURNING *",
-        (data["name"], data.get("sku"), data.get("description"), data.get("base_price", 0))
+        f"INSERT INTO {SCHEMA}.finished_products (name, sku, description, base_price, group_id, catalog_product_id, catalog_size_id, size_label) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("sku"), data.get("description"), data.get("base_price", 0), data.get("group_id"), data.get("catalog_product_id"), data.get("catalog_size_id"), data.get("size_label"))
     )
     cols = [d[0] for d in cur.description]
     fp = dict(zip(cols, cur.fetchone()))
@@ -405,8 +430,8 @@ def create_finished_product(cur, data):
 
 def update_finished_product(cur, fpid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.finished_products SET name=%s, sku=%s, description=%s, base_price=%s, is_active=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data["name"], data.get("sku"), data.get("description"), data.get("base_price", 0), data.get("is_active", True), fpid)
+        f"UPDATE {SCHEMA}.finished_products SET name=%s, sku=%s, description=%s, base_price=%s, is_active=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
+        (data["name"], data.get("sku"), data.get("description"), data.get("base_price", 0), data.get("is_active", True), data.get("group_id"), fpid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -426,6 +451,69 @@ def update_finished_product(cur, fpid, data):
             else:
                 cur.execute(f"INSERT INTO {SCHEMA}.finished_product_fittings (finished_product_id, fitting_id, qty) VALUES (%s,%s,%s)", (fpid, ft["fitting_id"], ft.get("qty", 1)))
     return fp
+
+
+def sync_catalog_to_finished(cur):
+    """Импорт товаров из каталога в готовую продукцию (по размерам). Обновляет названия."""
+    cur.execute(f"""
+        SELECT p.id, p.name, p.category, p.base_price, ps.id as size_id, ps.size_label, ps.price_add
+        FROM {SCHEMA}.products p
+        JOIN {SCHEMA}.product_sizes ps ON ps.product_id = p.id
+        WHERE p.is_active = true AND p.name != '' AND ps.is_available = true
+        ORDER BY p.category, p.name, ps.size_label
+    """)
+    cols = [d[0] for d in cur.description]
+    catalog_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    categories = {}
+    for cr in catalog_rows:
+        cat = cr["category"] or "Без категории"
+        if cat not in categories:
+            cur.execute(f"SELECT id FROM {SCHEMA}.groups WHERE entity_type='finished_products' AND name=%s AND is_active=true", (cat,))
+            row = cur.fetchone()
+            if row:
+                categories[cat] = row[0]
+            else:
+                cur.execute(f"INSERT INTO {SCHEMA}.groups (entity_type, name) VALUES ('finished_products', %s) RETURNING id", (cat,))
+                categories[cat] = cur.fetchone()[0]
+
+    created = 0
+    updated = 0
+    for cr in catalog_rows:
+        full_name = f"{cr['name']} [{cr['size_label']}]"
+        price = cr["base_price"] + cr["price_add"]
+        cat = cr["category"] or "Без категории"
+        group_id = categories.get(cat)
+
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.finished_products WHERE catalog_product_id=%s AND catalog_size_id=%s", (cr["id"], cr["size_id"]))
+        existing = cur.fetchone()
+        if existing:
+            if existing[1] != full_name:
+                cur.execute(f"UPDATE {SCHEMA}.finished_products SET name=%s, base_price=%s, group_id=%s, size_label=%s, updated_at=now() WHERE id=%s",
+                    (full_name, price, group_id, cr["size_label"], existing[0]))
+                updated += 1
+        else:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.finished_products (name, sku, base_price, catalog_product_id, catalog_size_id, size_label, group_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (full_name, "", price, cr["id"], cr["size_id"], cr["size_label"], group_id)
+            )
+            created += 1
+
+    return {"created": created, "updated": updated, "total_catalog": len(catalog_rows)}
+
+
+def list_catalog_products(cur):
+    """Список товаров каталога для UI"""
+    cur.execute(f"""
+        SELECT p.id, p.name, p.category, p.base_price, COUNT(ps.id) as sizes_count
+        FROM {SCHEMA}.products p
+        LEFT JOIN {SCHEMA}.product_sizes ps ON ps.product_id = p.id AND ps.is_available = true
+        WHERE p.is_active = true AND p.name != ''
+        GROUP BY p.id, p.name, p.category, p.base_price
+        ORDER BY p.category, p.name
+    """)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 # ========== STOCK ==========
@@ -774,6 +862,8 @@ def handler(event, context):
                 return ok(list_semi_products(cur))
             elif entity == "finished_products":
                 return ok(list_finished_products(cur))
+            elif entity == "catalog_products":
+                return ok(list_catalog_products(cur))
             elif entity == "stock":
                 return ok(list_stock(cur, qs.get("warehouse_id"), qs.get("item_type")))
             elif entity == "stock_movements":
@@ -812,6 +902,8 @@ def handler(event, context):
                 result = create_semi_product(cur, data)
             elif entity == "finished_products":
                 result = create_finished_product(cur, data)
+            elif entity == "sync_catalog":
+                result = sync_catalog_to_finished(cur)
             elif entity == "stock_movement":
                 result = stock_movement(cur, data)
             elif entity == "orders":

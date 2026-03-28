@@ -12,6 +12,7 @@ export interface Group {
   entity_type: string;
   name: string;
   sort_order: number;
+  parent_id: number | null;
   created_at: string;
 }
 
@@ -139,6 +140,8 @@ export interface SemiProduct {
   sku: string;
   description: string;
   is_active: boolean;
+  group_id: number | null;
+  group_name?: string;
   materials: SemiProductMaterial[];
   operations: SemiProductOperation[];
 }
@@ -168,6 +171,12 @@ export interface FinishedProduct {
   description: string;
   base_price: number;
   is_active: boolean;
+  group_id: number | null;
+  group_name?: string;
+  catalog_product_id: number | null;
+  catalog_size_id: number | null;
+  catalog_category?: string;
+  size_label: string | null;
   semi_products: FinishedProductSemi[];
   fittings: FinishedProductFitting[];
 }

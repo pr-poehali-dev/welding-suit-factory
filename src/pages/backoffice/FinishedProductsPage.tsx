@@ -7,7 +7,9 @@ import {
   FinishedProductFitting,
   SemiProduct,
   Fitting,
+  Group,
 } from "@/pages/backoffice/types";
+import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +25,7 @@ import {
 
 const EMPTY: Partial<FinishedProduct> = {
   name: "", sku: "", description: "", base_price: 0, is_active: true,
-  semi_products: [], fittings: [],
+  semi_products: [], fittings: [], group_id: null,
 };
 
 export default function FinishedProductsPage() {
@@ -32,6 +34,9 @@ export default function FinishedProductsPage() {
   const [form, setForm] = useState<Partial<FinishedProduct>>(EMPTY);
   const [semiRows, setSemiRows] = useState<Partial<FinishedProductSemi>[]>([]);
   const [fitRows, setFitRows] = useState<Partial<FinishedProductFitting>[]>([]);
+  const [groupFilter, setGroupFilter] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState("");
 
   /* --- данные --- */
   const { data: items = [], isLoading } = useQuery<FinishedProduct[]>({
@@ -45,6 +50,10 @@ export default function FinishedProductsPage() {
   const { data: fittings = [] } = useQuery<Fitting[]>({
     queryKey: ["bo-fittings"],
     queryFn: () => boFetch("fittings"),
+  });
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["bo-groups", "finished_products"],
+    queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "finished_products" }),
   });
 
   /* --- мутации --- */
@@ -72,6 +81,20 @@ export default function FinishedProductsPage() {
     onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
   });
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await boFetch("sync_catalog", "POST", {});
+      qc.invalidateQueries({ queryKey: ["bo-finished-products"] });
+      qc.invalidateQueries({ queryKey: ["bo-groups", "finished_products"] });
+      toast({ title: "Каталог синхронизирован", description: `Создано: ${result.created}, обновлено: ${result.updated}` });
+    } catch (e: unknown) {
+      toast({ title: "Ошибка синхронизации", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const openNew = () => {
     setForm(EMPTY);
     setSemiRows([]);
@@ -82,7 +105,7 @@ export default function FinishedProductsPage() {
   const openEdit = (fp: FinishedProduct) => {
     setForm({
       id: fp.id, name: fp.name, sku: fp.sku, description: fp.description,
-      base_price: fp.base_price, is_active: fp.is_active,
+      base_price: fp.base_price, is_active: fp.is_active, group_id: fp.group_id,
     });
     setSemiRows(fp.semi_products?.map((s) => ({ ...s })) ?? []);
     setFitRows(fp.fittings?.map((f) => ({ ...f })) ?? []);
@@ -98,65 +121,119 @@ export default function FinishedProductsPage() {
     setFitRows((p) => p.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   const removeFit = (idx: number) => setFitRows((p) => p.filter((_, i) => i !== idx));
 
+  /* --- группы: подсчёт и фильтрация --- */
+  const groupCounts = (() => {
+    const c: Record<number | string, number> = { all: items.length, ungrouped: 0 };
+    items.forEach((fp) => {
+      if (fp.group_id) c[fp.group_id] = (c[fp.group_id] || 0) + 1;
+      else c["ungrouped"] = (c["ungrouped"] || 0) + 1;
+    });
+    return c;
+  })();
+
+  const tree = buildTree(groups);
+  function findNode(nodes: TreeGroup[], id: number): TreeGroup | null {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNode(n.children, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const filtered = items.filter((fp) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || fp.name.toLowerCase().includes(q) || (fp.sku || "").toLowerCase().includes(q) || (fp.size_label || "").toLowerCase().includes(q);
+    const matchGroup = (() => {
+      if (groupFilter === null) return true;
+      if (groupFilter === -1) return !fp.group_id;
+      const node = findNode(tree, groupFilter);
+      if (!node) return fp.group_id === groupFilter;
+      const ids = collectIds(node);
+      return ids.includes(fp.group_id as number);
+    })();
+    return matchSearch && matchGroup;
+  });
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Готовая продукция</h1>
-        <Button onClick={openNew} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
-          <Icon name="Plus" size={16} /> Добавить
-        </Button>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Поиск..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-48 bg-white text-slate-800 border-slate-300"
+          />
+          <Button onClick={handleSync} disabled={syncing} className="gap-1.5 bg-green-600 hover:bg-green-700 text-white">
+            <Icon name={syncing ? "Loader2" : "RefreshCw"} size={16} className={syncing ? "animate-spin" : ""} />
+            Импорт из каталога
+          </Button>
+          <Button onClick={openNew} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
+            <Icon name="Plus" size={16} /> Добавить
+          </Button>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-4 py-3">Название</th>
-                <th className="px-4 py-3">Артикул</th>
-                <th className="px-4 py-3">Цена</th>
-                <th className="px-4 py-3">Полуфабрикатов</th>
-                <th className="px-4 py-3">Фурнитуры</th>
-                <th className="px-4 py-3">Активен</th>
-                <th className="px-4 py-3 text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((fp, i) => (
-                <tr key={fp.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                  <td className="px-4 py-2.5 font-medium text-slate-700">{fp.name}</td>
-                  <td className="px-4 py-2.5 font-mono text-slate-600">{fp.sku}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{Number(fp.base_price).toLocaleString("ru")} r.</td>
-                  <td className="px-4 py-2.5 text-slate-600">{fp.semi_products?.length ?? 0}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{fp.fittings?.length ?? 0}</td>
-                  <td className="px-4 py-2.5">
-                    {fp.is_active ? (
-                      <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
-                    ) : (
-                      <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(fp)}>
-                        <Icon name="Pencil" size={15} />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remove.mutate(fp.id)}>
-                        <Icon name="Trash2" size={15} className="text-red-500" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
-              )}
-            </tbody>
-          </table>
+      <div className="flex gap-4">
+        <GroupManager entityType="finished_products" selectedGroupId={groupFilter} onSelect={setGroupFilter} counts={groupCounts} />
+
+        <div className="flex-1 min-w-0">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-3">Название</th>
+                    <th className="px-4 py-3">Размер</th>
+                    <th className="px-4 py-3">Артикул</th>
+                    <th className="px-4 py-3">Цена</th>
+                    <th className="px-4 py-3">Полуфабрикатов</th>
+                    <th className="px-4 py-3">Фурнитуры</th>
+                    <th className="px-4 py-3">Активен</th>
+                    <th className="px-4 py-3 text-right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((fp, i) => (
+                    <tr key={fp.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{fp.name}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{fp.size_label || "\u2014"}</td>
+                      <td className="px-4 py-2.5 font-mono text-slate-600">{fp.sku}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{Number(fp.base_price).toLocaleString("ru")} r.</td>
+                      <td className="px-4 py-2.5 text-slate-600">{fp.semi_products?.length ?? 0}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{fp.fittings?.length ?? 0}</td>
+                      <td className="px-4 py-2.5">
+                        {fp.is_active ? (
+                          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
+                        ) : (
+                          <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(fp)}>
+                            <Icon name="Pencil" size={15} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => remove.mutate(fp.id)}>
+                            <Icon name="Trash2" size={15} className="text-red-500" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* --- Dialog --- */}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -189,6 +266,19 @@ export default function FinishedProductsPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Описание</label>
               <Textarea className="bg-white text-slate-800 border-slate-300" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                value={form.group_id ?? ""}
+                onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">— без группы —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
