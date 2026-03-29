@@ -465,17 +465,23 @@ def sync_catalog_to_finished(cur):
     cols = [d[0] for d in cur.description]
     catalog_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
+    cur.execute(f"SELECT id, name FROM {SCHEMA}.groups WHERE entity_type='finished_products' AND is_active=true")
+    existing_groups = {r[1]: r[0] for r in cur.fetchall()}
     categories = {}
+    needed_cats = set()
     for cr in catalog_rows:
-        cat = cr["category"] or "Без категории"
-        if cat not in categories:
-            cur.execute(f"SELECT id FROM {SCHEMA}.groups WHERE entity_type='finished_products' AND name=%s AND is_active=true", (cat,))
-            row = cur.fetchone()
-            if row:
-                categories[cat] = row[0]
-            else:
-                cur.execute(f"INSERT INTO {SCHEMA}.groups (entity_type, name) VALUES ('finished_products', %s) RETURNING id", (cat,))
-                categories[cat] = cur.fetchone()[0]
+        needed_cats.add(cr["category"] or "Без категории")
+    for cat in needed_cats:
+        if cat in existing_groups:
+            categories[cat] = existing_groups[cat]
+        else:
+            cur.execute(f"INSERT INTO {SCHEMA}.groups (entity_type, name) VALUES ('finished_products', %s) RETURNING id", (cat,))
+            categories[cat] = cur.fetchone()[0]
+
+    cur.execute(f"SELECT id, name, catalog_product_id, catalog_size_id FROM {SCHEMA}.finished_products WHERE catalog_product_id IS NOT NULL")
+    existing_map = {}
+    for r in cur.fetchall():
+        existing_map[(r[2], r[3])] = {"id": r[0], "name": r[1]}
 
     created = 0
     updated = 0
@@ -484,13 +490,13 @@ def sync_catalog_to_finished(cur):
         price = cr["base_price"] + cr["price_add"]
         cat = cr["category"] or "Без категории"
         group_id = categories.get(cat)
+        key = (cr["id"], cr["size_id"])
 
-        cur.execute(f"SELECT id, name FROM {SCHEMA}.finished_products WHERE catalog_product_id=%s AND catalog_size_id=%s", (cr["id"], cr["size_id"]))
-        existing = cur.fetchone()
+        existing = existing_map.get(key)
         if existing:
-            if existing[1] != full_name:
+            if existing["name"] != full_name:
                 cur.execute(f"UPDATE {SCHEMA}.finished_products SET name=%s, base_price=%s, group_id=%s, size_label=%s, updated_at=now() WHERE id=%s",
-                    (full_name, price, group_id, cr["size_label"], existing[0]))
+                    (full_name, price, group_id, cr["size_label"], existing["id"]))
                 updated += 1
         else:
             cur.execute(
