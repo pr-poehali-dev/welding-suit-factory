@@ -306,6 +306,3 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
     </div>
   );
 }
-
-export { buildTree, collectIds };
-export type { TreeGroup };
