@@ -176,6 +176,7 @@ export interface FinishedProduct {
   catalog_product_id: number | null;
   catalog_size_id: number | null;
   catalog_category?: string;
+  catalog_product_name?: string;
   size_label: string | null;
   semi_products: FinishedProductSemi[];
   fittings: FinishedProductFitting[];

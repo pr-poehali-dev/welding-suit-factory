@@ -380,31 +380,40 @@ def update_semi_product(cur, spid, data):
 # ========== FINISHED PRODUCTS ==========
 def list_finished_products(cur):
     cur.execute(f"""
-        SELECT fp.*, g.name as group_name, p.category as catalog_category
+        SELECT fp.*, g.name as group_name, p.category as catalog_category, p.name as catalog_product_name
         FROM {SCHEMA}.finished_products fp
         LEFT JOIN {SCHEMA}.groups g ON fp.group_id = g.id
         LEFT JOIN {SCHEMA}.products p ON fp.catalog_product_id = p.id
-        ORDER BY fp.name, fp.size_label
+        ORDER BY p.name NULLS LAST, fp.name, fp.size_label
     """)
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    for row in rows:
+    fp_ids = [r["id"] for r in rows]
+    fp_map = {r["id"]: r for r in rows}
+    for r in rows:
+        r["semi_products"] = []
+        r["fittings"] = []
+    if fp_ids:
         cur.execute(f"""
             SELECT fps.*, sp.name as semi_product_name
             FROM {SCHEMA}.finished_product_semi fps
             JOIN {SCHEMA}.semi_products sp ON fps.semi_product_id = sp.id
-            WHERE fps.finished_product_id = %s
-        """, (row["id"],))
+            WHERE fps.finished_product_id = ANY(%s)
+        """, (fp_ids,))
         sc = [d[0] for d in cur.description]
-        row["semi_products"] = [dict(zip(sc, r)) for r in cur.fetchall()]
+        for r in cur.fetchall():
+            row = dict(zip(sc, r))
+            fp_map[row["finished_product_id"]]["semi_products"].append(row)
         cur.execute(f"""
             SELECT fpf.*, f.name as fitting_name
             FROM {SCHEMA}.finished_product_fittings fpf
             JOIN {SCHEMA}.fittings f ON fpf.fitting_id = f.id
-            WHERE fpf.finished_product_id = %s
-        """, (row["id"],))
+            WHERE fpf.finished_product_id = ANY(%s)
+        """, (fp_ids,))
         fc = [d[0] for d in cur.description]
-        row["fittings"] = [dict(zip(fc, r)) for r in cur.fetchall()]
+        for r in cur.fetchall():
+            row = dict(zip(fc, r))
+            fp_map[row["finished_product_id"]]["fittings"].append(row)
     return rows
 
 
@@ -506,6 +515,17 @@ def sync_catalog_to_finished(cur):
             created += 1
 
     return {"created": created, "updated": updated, "total_catalog": len(catalog_rows)}
+
+
+def delete_finished_product(cur, fpid):
+    """Удаление готовой продукции по id"""
+    cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE finished_product_id=%s", (fpid,))
+    cur.execute(f"DELETE FROM {SCHEMA}.finished_product_fittings WHERE finished_product_id=%s", (fpid,))
+    cur.execute(f"DELETE FROM {SCHEMA}.finished_products WHERE id=%s RETURNING id", (fpid,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {"deleted": fpid}
 
 
 def list_catalog_products(cur):
@@ -961,6 +981,8 @@ def handler(event, context):
                 return err("id required")
             if entity == "groups":
                 result = delete_group(cur, item_id)
+            elif entity == "finished_products":
+                result = delete_finished_product(cur, item_id)
             else:
                 return err("Unknown entity for DELETE")
             conn.commit()

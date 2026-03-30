@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   boFetch,
@@ -28,6 +28,14 @@ const EMPTY: Partial<FinishedProduct> = {
   semi_products: [], fittings: [], group_id: null,
 };
 
+interface ModelGroup {
+  key: string;
+  name: string;
+  category: string;
+  catalogProductId: number | null;
+  items: FinishedProduct[];
+}
+
 export default function FinishedProductsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -37,8 +45,8 @@ export default function FinishedProductsPage() {
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
-  /* --- данные --- */
   const { data: items = [], isLoading } = useQuery<FinishedProduct[]>({
     queryKey: ["bo-finished-products"],
     queryFn: () => boFetch("finished_products"),
@@ -56,7 +64,6 @@ export default function FinishedProductsPage() {
     queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "finished_products" }),
   });
 
-  /* --- мутации --- */
   const save = useMutation({
     mutationFn: (data: Partial<FinishedProduct>) =>
       boFetch("finished_products", data.id ? "PUT" : "POST", {
@@ -112,7 +119,6 @@ export default function FinishedProductsPage() {
     setOpen(true);
   };
 
-  /* --- row helpers --- */
   const updateSemi = (idx: number, patch: Partial<FinishedProductSemi>) =>
     setSemiRows((p) => p.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   const removeSemi = (idx: number) => setSemiRows((p) => p.filter((_, i) => i !== idx));
@@ -121,7 +127,6 @@ export default function FinishedProductsPage() {
     setFitRows((p) => p.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   const removeFit = (idx: number) => setFitRows((p) => p.filter((_, i) => i !== idx));
 
-  /* --- группы: подсчёт и фильтрация --- */
   const groupCounts = (() => {
     const c: Record<number | string, number> = { all: items.length, ungrouped: 0 };
     items.forEach((fp) => {
@@ -143,7 +148,7 @@ export default function FinishedProductsPage() {
 
   const filtered = items.filter((fp) => {
     const q = search.toLowerCase();
-    const matchSearch = !q || fp.name.toLowerCase().includes(q) || (fp.sku || "").toLowerCase().includes(q) || (fp.size_label || "").toLowerCase().includes(q);
+    const matchSearch = !q || fp.name.toLowerCase().includes(q) || (fp.sku || "").toLowerCase().includes(q) || (fp.size_label || "").toLowerCase().includes(q) || (fp.catalog_product_name || "").toLowerCase().includes(q);
     const matchGroup = (() => {
       if (groupFilter === null) return true;
       if (groupFilter === -1) return !fp.group_id;
@@ -154,6 +159,56 @@ export default function FinishedProductsPage() {
     })();
     return matchSearch && matchGroup;
   });
+
+  const modelGroups = useMemo(() => {
+    const map = new Map<string, ModelGroup>();
+    for (const fp of filtered) {
+      const key = fp.catalog_product_id
+        ? `catalog_${fp.catalog_product_id}`
+        : `manual_${fp.id}`;
+
+      if (fp.catalog_product_id) {
+        let group = map.get(key);
+        if (!group) {
+          group = {
+            key,
+            name: fp.catalog_product_name || fp.name.replace(/\s*\[.*?\]\s*$/, ""),
+            category: fp.catalog_category || fp.group_name || "",
+            catalogProductId: fp.catalog_product_id,
+            items: [],
+          };
+          map.set(key, group);
+        }
+        group.items.push(fp);
+      } else {
+        map.set(key, {
+          key,
+          name: fp.name,
+          category: fp.group_name || "",
+          catalogProductId: null,
+          items: [fp],
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [filtered]);
+
+  const toggleModel = (key: string) => {
+    setExpandedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    setExpandedModels(new Set(modelGroups.map((g) => g.key)));
+  };
+
+  const collapseAll = () => {
+    setExpandedModels(new Set());
+  };
 
   return (
     <div>
@@ -183,59 +238,132 @@ export default function FinishedProductsPage() {
           {isLoading ? (
             <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    <th className="px-4 py-3">Название</th>
-                    <th className="px-4 py-3">Размер</th>
-                    <th className="px-4 py-3">Артикул</th>
-                    <th className="px-4 py-3">Цена</th>
-                    <th className="px-4 py-3">Полуфабрикатов</th>
-                    <th className="px-4 py-3">Фурнитуры</th>
-                    <th className="px-4 py-3">Активен</th>
-                    <th className="px-4 py-3 text-right">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((fp, i) => (
-                    <tr key={fp.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                      <td className="px-4 py-2.5 font-medium text-slate-700">{fp.name}</td>
-                      <td className="px-4 py-2.5 text-slate-600">{fp.size_label || "\u2014"}</td>
-                      <td className="px-4 py-2.5 font-mono text-slate-600">{fp.sku}</td>
-                      <td className="px-4 py-2.5 text-slate-600">{Number(fp.base_price).toLocaleString("ru")} r.</td>
-                      <td className="px-4 py-2.5 text-slate-600">{fp.semi_products?.length ?? 0}</td>
-                      <td className="px-4 py-2.5 text-slate-600">{fp.fittings?.length ?? 0}</td>
-                      <td className="px-4 py-2.5">
-                        {fp.is_active ? (
-                          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
-                        ) : (
-                          <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(fp)}>
-                            <Icon name="Pencil" size={15} />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => remove.mutate(fp.id)}>
-                            <Icon name="Trash2" size={15} className="text-red-500" />
-                          </Button>
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm text-slate-500">
+                  {modelGroups.length} моделей, {filtered.length} позиций
+                </span>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={expandAll} className="text-xs text-slate-500">
+                    <Icon name="ChevronsDown" size={14} className="mr-1" /> Развернуть все
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={collapseAll} className="text-xs text-slate-500">
+                    <Icon name="ChevronsUp" size={14} className="mr-1" /> Свернуть все
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {modelGroups.map((mg) => {
+                  const isExpanded = expandedModels.has(mg.key);
+                  const hasSizes = mg.items.length > 1 || (mg.items.length === 1 && mg.catalogProductId);
+                  const totalSemi = mg.items.reduce((s, fp) => s + (fp.semi_products?.length ?? 0), 0);
+                  const totalFit = mg.items.reduce((s, fp) => s + (fp.fittings?.length ?? 0), 0);
+                  const priceRange = (() => {
+                    const prices = mg.items.map((fp) => Number(fp.base_price));
+                    const min = Math.min(...prices);
+                    const max = Math.max(...prices);
+                    return min === max ? `${min.toLocaleString("ru")} р.` : `${min.toLocaleString("ru")} — ${max.toLocaleString("ru")} р.`;
+                  })();
+
+                  return (
+                    <div key={mg.key} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+                      <div
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                        onClick={() => toggleModel(mg.key)}
+                      >
+                        <Icon
+                          name={isExpanded ? "ChevronDown" : "ChevronRight"}
+                          size={18}
+                          className="text-slate-400 flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-800 truncate">{mg.name}</span>
+                            {mg.category && (
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 flex-shrink-0">{mg.category}</span>
+                            )}
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-500 flex-shrink-0">
+                          <span>{mg.items.length} размер{mg.items.length === 1 ? "" : mg.items.length < 5 ? "а" : "ов"}</span>
+                          <span className="font-medium text-slate-700">{priceRange}</span>
+                          {totalSemi > 0 && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">ПФ: {totalSemi}</span>}
+                          {totalFit > 0 && <span className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Ф: {totalFit}</span>}
+                        </div>
+                        {!hasSizes && (
+                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(mg.items[0])}>
+                              <Icon name="Pencil" size={15} />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => remove.mutate(mg.items[0].id)}>
+                              <Icon name="Trash2" size={15} className="text-red-500" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isExpanded && hasSizes && (
+                        <div className="border-t border-slate-100">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-slate-50/80 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                                <th className="px-4 py-2 pl-12">Размер</th>
+                                <th className="px-4 py-2">Артикул</th>
+                                <th className="px-4 py-2">Цена</th>
+                                <th className="px-4 py-2">ПФ</th>
+                                <th className="px-4 py-2">Фурнитура</th>
+                                <th className="px-4 py-2">Активен</th>
+                                <th className="px-4 py-2 text-right">Действия</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {mg.items.map((fp, i) => (
+                                <tr key={fp.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/30"}>
+                                  <td className="px-4 py-2 pl-12 font-medium text-slate-700">
+                                    {fp.size_label || fp.name}
+                                  </td>
+                                  <td className="px-4 py-2 font-mono text-slate-500 text-xs">{fp.sku || "—"}</td>
+                                  <td className="px-4 py-2 text-slate-600">{Number(fp.base_price).toLocaleString("ru")} р.</td>
+                                  <td className="px-4 py-2 text-slate-500">{fp.semi_products?.length ?? 0}</td>
+                                  <td className="px-4 py-2 text-slate-500">{fp.fittings?.length ?? 0}</td>
+                                  <td className="px-4 py-2">
+                                    {fp.is_active ? (
+                                      <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
+                                    ) : (
+                                      <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 text-right">
+                                    <div className="flex justify-end gap-1">
+                                      <Button variant="ghost" size="sm" onClick={() => openEdit(fp)}>
+                                        <Icon name="Pencil" size={15} />
+                                      </Button>
+                                      <Button variant="ghost" size="sm" onClick={() => remove.mutate(fp.id)}>
+                                        <Icon name="Trash2" size={15} className="text-red-500" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {modelGroups.length === 0 && (
+                  <div className="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-slate-400">
+                    Нет записей
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* --- Dialog --- */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl bg-white text-slate-800 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -286,7 +414,6 @@ export default function FinishedProductsPage() {
             </div>
           </div>
 
-          {/* --- Полуфабрикаты --- */}
           <div className="mt-4 border-t border-slate-200 pt-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">Полуфабрикаты</h3>
@@ -332,7 +459,6 @@ export default function FinishedProductsPage() {
             {semiRows.length === 0 && <p className="text-xs text-slate-400">Нет полуфабрикатов</p>}
           </div>
 
-          {/* --- Фурнитура --- */}
           <div className="mt-4 border-t border-slate-200 pt-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">Фурнитура</h3>
@@ -378,9 +504,15 @@ export default function FinishedProductsPage() {
             {fitRows.length === 0 && <p className="text-xs text-slate-400">Нет фурнитуры</p>}
           </div>
 
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setOpen(false)} className="text-slate-600 border-slate-300">Отмена</Button>
-            <Button onClick={() => save.mutate(form)} disabled={save.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} className="text-slate-600 border-slate-300">
+              Отмена
+            </Button>
+            <Button
+              onClick={() => save.mutate(form)}
+              disabled={save.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {save.isPending ? "Сохранение..." : "Сохранить"}
             </Button>
           </DialogFooter>
