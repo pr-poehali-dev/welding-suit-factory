@@ -93,7 +93,7 @@ export default function BackofficeLayout({ children }: BackofficeLayoutProps) {
     Record<string, boolean>
   >({
     Справочники: true,
-    "Отчёты": false,
+    "Отчёты": true,
   });
 
   const toggleSection = (label: string) => {
