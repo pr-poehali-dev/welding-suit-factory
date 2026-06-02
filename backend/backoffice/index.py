@@ -40,6 +40,161 @@ def parse_body(event):
     return json.loads(body)
 
 
+# ========== AUTH / ПРАВА ДОСТУПА ==========
+import hashlib
+import secrets
+
+DEFAULT_TEMPLATES = {
+    "director": {"__all__": True},
+    "manager": {
+        "dashboard.view": True,
+        "orders.view": True, "orders.edit": True,
+        "clients.view": True, "clients.edit": True,
+        "finished_products.view": True,
+        "stock.view": True,
+        "reports.view": True,
+    },
+    "storekeeper": {
+        "dashboard.view": True,
+        "stock.view": True, "stock.edit": True,
+        "materials.view": True,
+        "fittings.view": True,
+        "orders.view": True, "orders.hide_client": True,
+    },
+    "economist": {
+        "dashboard.view": True,
+        "orders.view": True,
+        "reports.view": True,
+        "materials.view": True,
+        "fittings.view": True,
+        "finished_products.view": True,
+        "stock.view": True,
+    },
+    "production_head": {
+        "dashboard.view": True,
+        "production.view": True, "production.edit": True,
+        "orders.view": True, "orders.hide_client": True,
+        "operations.view": True,
+        "semi_products.view": True,
+        "stock.view": True,
+        "workers.view": True,
+        "reports.view": True,
+    },
+    "worker": {
+        "production.view": True, "production.edit": True,
+        "orders.hide_client": True,
+    },
+    "technologist": {
+        "dashboard.view": True,
+        "operations.view": True, "operations.edit": True,
+        "semi_products.view": True, "semi_products.edit": True,
+        "finished_products.view": True, "finished_products.edit": True,
+        "materials.view": True,
+        "fittings.view": True,
+        "orders.view": True, "orders.hide_client": True,
+    },
+}
+
+# Сопоставление entity -> модуль права
+ENTITY_MODULE = {
+    "orders": "orders",
+    "order_status": "orders",
+    "clients": "clients",
+    "workers": "workers",
+    "worker_perms": "workers",
+    "materials": "materials",
+    "fittings": "fittings",
+    "operations": "operations",
+    "semi_products": "semi_products",
+    "finished_products": "finished_products",
+    "sync_catalog": "finished_products",
+    "catalog_products": "finished_products",
+    "units": "units",
+    "warehouses": "stock",
+    "stock": "stock",
+    "stock_movement": "stock",
+    "stock_movements": "stock",
+    "work_orders": "production",
+    "complete_operation": "production",
+    "pending_operations": "production",
+    "report_overconsumption": "reports",
+    "report_cost": "reports",
+    "groups": None,  # вспомогательное — доступно всем авторизованным
+}
+
+
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = secrets.token_hex(16)
+    h = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return f"{salt}${h}"
+
+
+def get_auth_user(cur, token):
+    if not token:
+        return None
+    cur.execute(
+        f"""SELECT w.id, w.full_name, w.access_level, w.is_blocked
+            FROM {SCHEMA}.auth_sessions s
+            JOIN {SCHEMA}.workers w ON s.worker_id = w.id
+            WHERE s.token=%s AND s.expires_at > now()""",
+        (token,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {"id": row[0], "full_name": row[1], "access_level": row[2], "is_blocked": row[3]}
+
+
+def resolve_permissions(cur, worker_id, access_level):
+    template = DEFAULT_TEMPLATES.get(access_level, {})
+    if template.get("__all__"):
+        return {"__all__": True}
+    cur.execute(
+        f"SELECT permission_key, allowed FROM {SCHEMA}.level_perm_templates WHERE access_level=%s",
+        (access_level,),
+    )
+    db_template = {r[0]: r[1] for r in cur.fetchall()}
+    merged = dict(template)
+    merged.update(db_template)
+    perms = {k: v for k, v in merged.items() if v}
+    cur.execute(
+        f"SELECT permission_key, allowed FROM {SCHEMA}.worker_permissions WHERE worker_id=%s",
+        (worker_id,),
+    )
+    for key, allowed in cur.fetchall():
+        if allowed:
+            perms[key] = True
+        else:
+            perms.pop(key, None)
+    return perms
+
+
+def has_perm(perms, key):
+    if perms.get("__all__"):
+        return True
+    return bool(perms.get(key))
+
+
+def list_worker_perms(cur, worker_id):
+    cur.execute(
+        f"SELECT permission_key, allowed FROM {SCHEMA}.worker_permissions WHERE worker_id=%s",
+        (worker_id,),
+    )
+    return [{"permission_key": r[0], "allowed": r[1]} for r in cur.fetchall()]
+
+
+def save_worker_perms(cur, worker_id, perms):
+    """perms — список {permission_key, allowed}. Полностью перезаписывает индивидуальные права."""
+    cur.execute(f"DELETE FROM {SCHEMA}.worker_permissions WHERE worker_id=%s", (worker_id,))
+    for p in perms:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.worker_permissions (worker_id, permission_key, allowed) VALUES (%s,%s,%s)",
+            (worker_id, p["permission_key"], bool(p.get("allowed", True))),
+        )
+    return {"ok": True, "count": len(perms)}
+
+
 # ========== GROUPS ==========
 def list_groups(cur, entity_type=None):
     if entity_type:
@@ -158,34 +313,69 @@ def update_client(cur, cid, data):
 
 
 # ========== WORKERS ==========
+WORKER_PUBLIC_COLS = "w.id, w.tab_number, w.full_name, w.position, w.phone, w.hourly_rate, w.is_active, w.created_at, w.group_id, w.login, w.access_level, w.is_blocked"
+
+
 def list_workers(cur):
     cur.execute(f"""
-        SELECT w.*, g.name as group_name
+        SELECT {WORKER_PUBLIC_COLS}, g.name as group_name,
+               (w.password_hash IS NOT NULL) as has_password
         FROM {SCHEMA}.workers w
         LEFT JOIN {SCHEMA}.groups g ON w.group_id = g.id
         ORDER BY w.full_name
     """)
-    cols = [d[0] for d in cur.description]
+    cols = [d[0].replace("w.", "") if d[0].startswith("w.") else d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def _worker_public(cur, wid):
+    cur.execute(f"""
+        SELECT {WORKER_PUBLIC_COLS}, g.name as group_name,
+               (w.password_hash IS NOT NULL) as has_password
+        FROM {SCHEMA}.workers w
+        LEFT JOIN {SCHEMA}.groups g ON w.group_id = g.id
+        WHERE w.id=%s
+    """, (wid,))
+    cols = [d[0].replace("w.", "") if d[0].startswith("w.") else d[0] for d in cur.description]
+    row = cur.fetchone()
+    return dict(zip(cols, row)) if row else None
+
+
 def create_worker(cur, data):
+    login = (data.get("login") or "").strip() or None
+    pwd = data.get("password")
+    pwd_hash = hash_password(pwd) if pwd else None
     cur.execute(
-        f"INSERT INTO {SCHEMA}.workers (tab_number, full_name, position, phone, group_id) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("group_id"))
+        f"""INSERT INTO {SCHEMA}.workers
+            (tab_number, full_name, position, phone, group_id, login, password_hash, access_level, is_blocked)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"),
+         data.get("group_id"), login, pwd_hash, data.get("access_level"), data.get("is_blocked", False))
     )
-    cols = [d[0] for d in cur.description]
-    return dict(zip(cols, cur.fetchone()))
+    wid = cur.fetchone()[0]
+    if "permissions" in data:
+        save_worker_perms(cur, wid, data["permissions"])
+    return _worker_public(cur, wid)
 
 
 def update_worker(cur, wid, data):
+    login = (data.get("login") or "").strip() or None
     cur.execute(
-        f"UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s, is_active=%s, group_id=%s WHERE id=%s RETURNING *",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"), data.get("is_active", True), data.get("group_id"), wid)
+        f"""UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s,
+            is_active=%s, group_id=%s, login=%s, access_level=%s, is_blocked=%s WHERE id=%s RETURNING id""",
+        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"),
+         data.get("is_active", True), data.get("group_id"), login, data.get("access_level"),
+         data.get("is_blocked", False), wid)
     )
-    cols = [d[0] for d in cur.description]
     row = cur.fetchone()
-    return dict(zip(cols, row)) if row else None
+    if not row:
+        return None
+    pwd = data.get("password")
+    if pwd:
+        cur.execute(f"UPDATE {SCHEMA}.workers SET password_hash=%s WHERE id=%s", (hash_password(pwd), wid))
+    if "permissions" in data:
+        save_worker_perms(cur, wid, data["permissions"])
+    return _worker_public(cur, wid)
 
 
 # ========== MATERIALS ==========
@@ -619,7 +809,7 @@ def list_stock_movements(cur, warehouse_id=None, item_type=None, item_id=None, l
 
 
 # ========== ORDERS ==========
-def list_orders(cur, status=None):
+def list_orders(cur, status=None, hide_client=False):
     sql = f"""
         SELECT o.*, c.name as client_name, c.org as client_org
         FROM {SCHEMA}.orders o
@@ -634,6 +824,12 @@ def list_orders(cur, status=None):
     cur.execute(sql, params)
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    if hide_client:
+        for row in rows:
+            row["client_name"] = None
+            row["client_org"] = None
+            row["client_id"] = None
+            row["manager_name"] = None
     for row in rows:
         cur.execute(f"""
             SELECT oi.*, fp.name as product_name
@@ -861,12 +1057,33 @@ def handler(event, context):
     qs = event.get("queryStringParameters") or {}
     entity = qs.get("entity", "")
     action = qs.get("action", "")
+    headers = event.get("headers") or {}
+    token = headers.get("X-Auth-Token") or headers.get("x-auth-token")
 
     conn = get_conn()
     conn.autocommit = False
     cur = conn.cursor()
 
     try:
+        # ---- авторизация ----
+        user = get_auth_user(cur, token)
+        if not user:
+            return err("Не авторизован", 401)
+        if user["is_blocked"]:
+            return err("Учётная запись заблокирована", 403)
+        perms = resolve_permissions(cur, user["id"], user["access_level"])
+
+        # ---- проверка прав ----
+        module = ENTITY_MODULE.get(entity, "__deny__")
+        if module is not None and module != "__deny__":
+            need = f"{module}.view" if method == "GET" else f"{module}.edit"
+            if not has_perm(perms, need):
+                return err("Недостаточно прав", 403)
+        elif module == "__deny__" and entity not in ("",):
+            return err("Недостаточно прав", 403)
+
+        hide_client = has_perm(perms, "orders.hide_client") and not has_perm(perms, "__all__")
+
         if method == "GET":
             if entity == "groups":
                 return ok(list_groups(cur, qs.get("entity_type")))
@@ -878,6 +1095,8 @@ def handler(event, context):
                 return ok(list_clients(cur))
             elif entity == "workers":
                 return ok(list_workers(cur))
+            elif entity == "worker_perms":
+                return ok(list_worker_perms(cur, int(qs.get("worker_id", 0))))
             elif entity == "materials":
                 return ok(list_materials(cur))
             elif entity == "fittings":
@@ -895,7 +1114,7 @@ def handler(event, context):
             elif entity == "stock_movements":
                 return ok(list_stock_movements(cur, qs.get("warehouse_id"), qs.get("item_type"), qs.get("item_id")))
             elif entity == "orders":
-                return ok(list_orders(cur, qs.get("status")))
+                return ok(list_orders(cur, qs.get("status"), hide_client))
             elif entity == "work_orders":
                 return ok(list_work_orders(cur, qs.get("order_id"), qs.get("status")))
             elif entity == "pending_operations":
@@ -938,6 +1157,8 @@ def handler(event, context):
                 result = create_work_order(cur, data)
             elif entity == "complete_operation":
                 result = complete_work_order_operation(cur, int(data["operation_id"]), data)
+            elif entity == "worker_perms":
+                result = save_worker_perms(cur, int(data["worker_id"]), data.get("permissions", []))
             else:
                 return err("Unknown entity for POST")
             conn.commit()

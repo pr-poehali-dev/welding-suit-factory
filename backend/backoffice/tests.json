@@ -1,89 +1,35 @@
 {
   "tests": [
     {
-      "name": "List entities index",
-      "method": "GET",
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
       "path": "/",
-      "expectedStatus": 200,
-      "expectedBody": {},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     },
     {
-      "name": "List groups",
+      "name": "Без токена — не авторизован",
       "method": "GET",
       "path": "/?entity=groups",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
+      "expectedStatus": 401
     },
     {
-      "name": "List groups by type",
-      "method": "GET",
-      "path": "/?entity=groups&entity_type=materials",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "List units",
-      "method": "GET",
-      "path": "/?entity=units",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "List warehouses",
-      "method": "GET",
-      "path": "/?entity=warehouses",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "List workers",
+      "name": "Workers без токена — не авторизован",
       "method": "GET",
       "path": "/?entity=workers",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
+      "expectedStatus": 401
     },
     {
-      "name": "List materials",
-      "method": "GET",
-      "path": "/?entity=materials",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "List operations",
-      "method": "GET",
-      "path": "/?entity=operations",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "List orders",
+      "name": "Orders без токена — не авторизован",
       "method": "GET",
       "path": "/?entity=orders",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
+      "expectedStatus": 401
     },
     {
-      "name": "List stock",
+      "name": "Невалидный токен — не авторизован",
       "method": "GET",
-      "path": "/?entity=stock",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Pending operations",
-      "method": "GET",
-      "path": "/?entity=pending_operations",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Overconsumption report",
-      "method": "GET",
-      "path": "/?entity=report_overconsumption",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
+      "path": "/?entity=groups",
+      "headers": {"X-Auth-Token": "invalid-token-xyz"},
+      "expectedStatus": 401
     }
   ]
 }

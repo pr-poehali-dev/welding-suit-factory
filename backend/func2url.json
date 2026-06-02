@@ -1,6 +1,7 @@
 {
-  "backoffice": "https://functions.poehali.dev/1ab6512a-2f81-431f-a593-c6a9b944fe39",
-  "send-promo": "https://functions.poehali.dev/01af805d-fc1a-45ea-a4f2-054ed53c55b7",
-  "send-order": "https://functions.poehali.dev/7b81d36e-be04-4b5e-828d-eab1f6a6a992",
-  "products": "https://functions.poehali.dev/867570d6-4bd3-4fdc-977c-f50fd3926c0e"
+  "backoffice": "https://functions.poehali.dev/f6ac7544-e889-4659-85ea-1f9249a72e08",
+  "auth": "https://functions.poehali.dev/fb67a2f5-a6c6-4473-96dc-0b4c9ab91074",
+  "send-order": "https://functions.poehali.dev/e74c8766-4916-4973-bba9-a34a528d8f5c",
+  "send-promo": "https://functions.poehali.dev/d4379f78-0644-4997-9045-297f5443c9ee",
+  "products": "https://functions.poehali.dev/f2bce75a-3f10-4489-ad5f-d3cb77799549"
 }

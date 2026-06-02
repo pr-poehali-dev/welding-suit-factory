@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Login без данных возвращает ошибку",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {},
+      "expectedStatus": 400
+    },
+    {
+      "name": "Login с неверными данными",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"login": "nouser", "password": "wrong"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "Me без токена",
+      "method": "GET",
+      "path": "/?action=me",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Неизвестное действие",
+      "method": "GET",
+      "path": "/?action=unknown",
+      "expectedStatus": 400
+    }
+  ]
+}
