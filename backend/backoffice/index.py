@@ -1014,9 +1014,10 @@ def report_overconsumption(cur):
 
 
 def report_cost(cur, order_id):
-    """Расчёт себестоимости заказа"""
+    """Себестоимость заказа по фактически потраченным материалам, фурнитуре и труду."""
     cur.execute(f"""
-        SELECT oi.id as order_item_id, fp.name as product_name, oi.qty, oi.unit_price, oi.total_price
+        SELECT oi.id as order_item_id, oi.finished_product_id, fp.name as product_name,
+               oi.qty, oi.unit_price, oi.total_price
         FROM {SCHEMA}.order_items oi
         JOIN {SCHEMA}.finished_products fp ON oi.finished_product_id = fp.id
         WHERE oi.order_id = %s
@@ -1024,26 +1025,96 @@ def report_cost(cur, order_id):
     cols = [d[0] for d in cur.description]
     items = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-    total_mat = 0
-    total_fit = 0
-    total_labor = 0
+    total_mat = 0.0
+    total_fit = 0.0
+    total_labor = 0.0
+
     for item in items:
+        oi_id = item["order_item_id"]
+        fp_id = item["finished_product_id"]
+        qty = float(item.get("qty") or 0)
+
+        # --- труд (фактически выполненные операции) ---
         cur.execute(f"""
             SELECT COALESCE(SUM(woo.labor_cost), 0)
             FROM {SCHEMA}.work_order_operations woo
             JOIN {SCHEMA}.work_orders wo ON woo.work_order_id = wo.id
             WHERE wo.order_item_id = %s AND woo.status = 'completed'
-        """, (item["order_item_id"],))
-        item["labor_cost"] = float(cur.fetchone()[0])
-        total_labor += item["labor_cost"]
+        """, (oi_id,))
+        labor = float(cur.fetchone()[0])
+
+        # --- материалы: фактический расход из заказ-нарядов ---
+        cur.execute(f"""
+            SELECT m.id, m.name, COALESCE(m.price_per_unit, 0) as price,
+                   COALESCE(SUM(COALESCE(woo.actual_material_norm, woo.planned_material_norm, 0)), 0) as used_qty,
+                   COALESCE(MAX(u.short_name), '') as unit_short
+            FROM {SCHEMA}.work_order_operations woo
+            JOIN {SCHEMA}.work_orders wo ON woo.work_order_id = wo.id
+            JOIN {SCHEMA}.materials m ON woo.material_id = m.id
+            LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+            WHERE wo.order_item_id = %s AND woo.status = 'completed' AND woo.material_id IS NOT NULL
+            GROUP BY m.id, m.name, m.price_per_unit
+        """, (oi_id,))
+        mat_rows = []
+        item_mat = 0.0
+        for r in cur.fetchall():
+            used = float(r[3])
+            price = float(r[2])
+            cost = used * price
+            item_mat += cost
+            mat_rows.append({
+                "material_id": r[0], "material_name": r[1], "price": price,
+                "used_qty": used, "unit_short": r[4], "cost": round(cost, 2),
+            })
+
+        # --- фурнитура: по нормам состава готовой продукции × кол-во ---
+        cur.execute(f"""
+            SELECT f.id, f.name, COALESCE(f.price_per_unit, 0) as price, fpf.qty,
+                   COALESCE(u.short_name, '') as unit_short
+            FROM {SCHEMA}.finished_product_fittings fpf
+            JOIN {SCHEMA}.fittings f ON fpf.fitting_id = f.id
+            LEFT JOIN {SCHEMA}.units u ON f.unit_id = u.id
+            WHERE fpf.finished_product_id = %s
+        """, (fp_id,))
+        fit_rows = []
+        item_fit = 0.0
+        for r in cur.fetchall():
+            per_unit = float(r[3] or 0)
+            total_used = per_unit * qty
+            price = float(r[2])
+            cost = total_used * price
+            item_fit += cost
+            fit_rows.append({
+                "fitting_id": r[0], "fitting_name": r[1], "price": price,
+                "qty_per_item": per_unit, "total_qty": total_used,
+                "unit_short": r[4], "cost": round(cost, 2),
+            })
+
+        item["labor_cost"] = round(labor, 2)
+        item["materials_cost"] = round(item_mat, 2)
+        item["fittings_cost"] = round(item_fit, 2)
+        item["materials"] = mat_rows
+        item["fittings"] = fit_rows
+        item["cost"] = round(labor + item_mat + item_fit, 2)
+        item["revenue"] = float(item.get("total_price") or 0)
+        item["margin"] = round(item["revenue"] - item["cost"], 2)
+
+        total_labor += labor
+        total_mat += item_mat
+        total_fit += item_fit
+
+    total_cost = total_mat + total_fit + total_labor
+    total_revenue = sum(float(i.get("total_price") or 0) for i in items)
 
     return {
         "order_id": order_id,
         "items": items,
-        "total_materials": total_mat,
-        "total_fittings": total_fit,
-        "total_labor": total_labor,
-        "total_cost": total_mat + total_fit + total_labor
+        "total_materials": round(total_mat, 2),
+        "total_fittings": round(total_fit, 2),
+        "total_labor": round(total_labor, 2),
+        "total_cost": round(total_cost, 2),
+        "total_revenue": round(total_revenue, 2),
+        "total_margin": round(total_revenue - total_cost, 2),
     }
 
 

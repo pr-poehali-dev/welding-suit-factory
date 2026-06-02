@@ -60,6 +60,12 @@ const NAV_ITEMS: NavItem[] = [
         path: "/backoffice/reports/overconsumption",
         module: "reports",
       },
+      {
+        label: "Себестоимость",
+        icon: "Calculator",
+        path: "/backoffice/reports/cost",
+        module: "reports",
+      },
     ],
   },
 ];

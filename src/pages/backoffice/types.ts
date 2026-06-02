@@ -412,6 +412,55 @@ export interface OverconsumptionRow {
   order_number: string;
 }
 
+// -------------------- себестоимость --------------------
+
+export interface CostMaterialRow {
+  material_id: number;
+  material_name: string;
+  price: number;
+  used_qty: number;
+  unit_short: string;
+  cost: number;
+}
+
+export interface CostFittingRow {
+  fitting_id: number;
+  fitting_name: string;
+  price: number;
+  qty_per_item: number;
+  total_qty: number;
+  unit_short: string;
+  cost: number;
+}
+
+export interface CostItem {
+  order_item_id: number;
+  finished_product_id: number;
+  product_name: string;
+  qty: number;
+  unit_price: number;
+  total_price: number;
+  labor_cost: number;
+  materials_cost: number;
+  fittings_cost: number;
+  materials: CostMaterialRow[];
+  fittings: CostFittingRow[];
+  cost: number;
+  revenue: number;
+  margin: number;
+}
+
+export interface CostReport {
+  order_id: number;
+  items: CostItem[];
+  total_materials: number;
+  total_fittings: number;
+  total_labor: number;
+  total_cost: number;
+  total_revenue: number;
+  total_margin: number;
+}
+
 // ============================================================
 // Константы
 // ============================================================
