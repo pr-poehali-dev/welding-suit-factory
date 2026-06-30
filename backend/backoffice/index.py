@@ -341,15 +341,45 @@ def _worker_public(cur, wid):
     return dict(zip(cols, row)) if row else None
 
 
-def create_worker(cur, data):
+class WorkerValidationError(Exception):
+    pass
+
+
+def _validate_worker(cur, data, wid=None):
+    tab = (data.get("tab_number") or "").strip()
+    if not tab:
+        raise WorkerValidationError("Укажите табельный номер")
     login = (data.get("login") or "").strip() or None
+
+    # проверка уникальности табельного номера
+    if wid:
+        cur.execute(f"SELECT id FROM {SCHEMA}.workers WHERE tab_number=%s AND id<>%s", (tab, wid))
+    else:
+        cur.execute(f"SELECT id FROM {SCHEMA}.workers WHERE tab_number=%s", (tab,))
+    if cur.fetchone():
+        raise WorkerValidationError(f"Табельный номер «{tab}» уже используется")
+
+    # проверка уникальности логина
+    if login:
+        if wid:
+            cur.execute(f"SELECT id FROM {SCHEMA}.workers WHERE login=%s AND id<>%s", (login, wid))
+        else:
+            cur.execute(f"SELECT id FROM {SCHEMA}.workers WHERE login=%s", (login,))
+        if cur.fetchone():
+            raise WorkerValidationError(f"Логин «{login}» уже занят")
+
+    return tab, login
+
+
+def create_worker(cur, data):
+    tab, login = _validate_worker(cur, data)
     pwd = data.get("password")
     pwd_hash = hash_password(pwd) if pwd else None
     cur.execute(
         f"""INSERT INTO {SCHEMA}.workers
             (tab_number, full_name, position, phone, group_id, login, password_hash, access_level, is_blocked)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"),
+        (tab, data["full_name"], data.get("position"), data.get("phone"),
          data.get("group_id"), login, pwd_hash, data.get("access_level"), data.get("is_blocked", False))
     )
     wid = cur.fetchone()[0]
@@ -359,11 +389,11 @@ def create_worker(cur, data):
 
 
 def update_worker(cur, wid, data):
-    login = (data.get("login") or "").strip() or None
+    tab, login = _validate_worker(cur, data, wid)
     cur.execute(
         f"""UPDATE {SCHEMA}.workers SET tab_number=%s, full_name=%s, position=%s, phone=%s,
             is_active=%s, group_id=%s, login=%s, access_level=%s, is_blocked=%s WHERE id=%s RETURNING id""",
-        (data["tab_number"], data["full_name"], data.get("position"), data.get("phone"),
+        (tab, data["full_name"], data.get("position"), data.get("phone"),
          data.get("is_active", True), data.get("group_id"), login, data.get("access_level"),
          data.get("is_blocked", False), wid)
     )
@@ -1275,6 +1305,11 @@ def handler(event, context):
                 result = delete_group(cur, item_id)
             elif entity == "finished_products":
                 result = delete_finished_product(cur, item_id)
+            elif entity == "workers":
+                cur.execute(f"DELETE FROM {SCHEMA}.worker_permissions WHERE worker_id=%s", (item_id,))
+                cur.execute(f"DELETE FROM {SCHEMA}.auth_sessions WHERE worker_id=%s", (item_id,))
+                cur.execute(f"DELETE FROM {SCHEMA}.workers WHERE id=%s RETURNING id", (item_id,))
+                result = {"ok": True} if cur.fetchone() else None
             else:
                 return err("Unknown entity for DELETE")
             conn.commit()
@@ -1284,9 +1319,15 @@ def handler(event, context):
 
         return err("Method not allowed", 405)
 
+    except WorkerValidationError as e:
+        conn.rollback()
+        return err(str(e), 400)
     except Exception as e:
         conn.rollback()
-        return err(str(e), 500)
+        msg = str(e)
+        if "unique" in msg.lower() or "duplicate" in msg.lower():
+            return err("Запись с такими данными уже существует", 400)
+        return err(msg, 500)
     finally:
         cur.close()
         conn.close()

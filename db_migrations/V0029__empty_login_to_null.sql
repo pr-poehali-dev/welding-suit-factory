@@ -1,0 +1,1 @@
+UPDATE t_p87775074_welding_suit_factory.workers SET login = NULL WHERE login = '';
