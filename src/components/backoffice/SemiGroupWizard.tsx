@@ -124,7 +124,7 @@ export default function SemiGroupWizard({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-3xl bg-white text-slate-800 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl w-[95vw] bg-white text-slate-800 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Мастер создания: группа полуфабрикатов</DialogTitle>
         </DialogHeader>
