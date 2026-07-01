@@ -10,6 +10,7 @@ import {
   ORDER_STATUSES,
 } from "@/pages/backoffice/types";
 import Icon from "@/components/ui/icon";
+import ProductPicker from "@/components/backoffice/ProductPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -369,23 +370,16 @@ export default function OrdersPage() {
               <div key={idx} className="mb-2 flex items-end gap-2">
                 <div className="flex-1">
                   <label className="mb-1 block text-xs text-slate-500">Продукция</label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800"
-                    value={row.finished_product_id ?? 0}
-                    onChange={(e) => {
-                      const pid = Number(e.target.value);
-                      const prod = products.find((p) => p.id === pid);
+                  <ProductPicker
+                    products={products}
+                    value={row.finished_product_id ?? null}
+                    onSelect={(prod) =>
                       updateItem(idx, {
-                        finished_product_id: pid,
-                        unit_price: prod?.base_price ?? row.unit_price ?? 0,
-                      });
-                    }}
-                  >
-                    <option value={0}>-- выберите --</option>
-                    {products.filter((p) => p.is_active).map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                        finished_product_id: prod.id,
+                        unit_price: prod.base_price ?? row.unit_price ?? 0,
+                      })
+                    }
+                  />
                 </div>
                 <div className="w-20">
                   <label className="mb-1 block text-xs text-slate-500">Кол-во</label>

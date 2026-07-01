@@ -896,6 +896,45 @@ def update_order_status(cur, oid, status):
     return dict(zip(cols, row)) if row else None
 
 
+def update_order(cur, oid, data):
+    # если пришёл только статус — обновляем статус
+    if "status" in data and not any(
+        k in data for k in ("client_id", "manager_name", "priority", "deadline", "notes", "items")
+    ):
+        return update_order_status(cur, oid, data.get("status"))
+
+    fields = []
+    params = []
+    for col in ("client_id", "manager_name", "priority", "deadline", "total_amount", "notes", "status"):
+        if col in data:
+            fields.append(f"{col}=%s")
+            params.append(data[col])
+    if fields:
+        fields.append("updated_at=now()")
+        params.append(oid)
+        cur.execute(
+            f"UPDATE {SCHEMA}.orders SET {', '.join(fields)} WHERE id=%s RETURNING *", params
+        )
+    else:
+        cur.execute(f"SELECT * FROM {SCHEMA}.orders WHERE id=%s", (oid,))
+    cols = [d[0] for d in cur.description]
+    row = cur.fetchone()
+    if not row:
+        return None
+    order = dict(zip(cols, row))
+
+    # обновляем позиции, если переданы
+    if "items" in data:
+        cur.execute(f"DELETE FROM {SCHEMA}.order_items WHERE order_id=%s", (oid,))
+        for item in data.get("items", []):
+            total = float(item.get("unit_price", 0)) * int(item.get("qty", 1))
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.order_items (order_id, finished_product_id, qty, unit_price, total_price, notes) VALUES (%s,%s,%s,%s,%s,%s)",
+                (oid, item["finished_product_id"], item.get("qty", 1), item.get("unit_price", 0), total, item.get("notes"))
+            )
+    return order
+
+
 # ========== WORK ORDERS (ЗАКАЗ-НАРЯДЫ) ==========
 def list_work_orders(cur, order_id=None, status=None):
     sql = f"""
@@ -1289,6 +1328,8 @@ def handler(event, context):
                 result = update_finished_product(cur, item_id, data)
             elif entity == "order_status":
                 result = update_order_status(cur, item_id, data.get("status"))
+            elif entity == "orders":
+                result = update_order(cur, item_id, data)
             else:
                 return err("Unknown entity for PUT")
             conn.commit()

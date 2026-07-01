@@ -214,8 +214,29 @@ export default function BackofficeLayout({ children }: BackofficeLayoutProps) {
         <div className="flex-1 overflow-y-auto">{sidebarContent}</div>
 
         {/* нижняя плашка */}
-        <div className="border-t border-slate-200 px-4 py-3 text-xs text-slate-400">
-          Швейное производство
+        <div className="border-t border-slate-200 p-3">
+          {user && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600">
+                {user.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-slate-700 leading-tight">
+                  {user.full_name}
+                </div>
+                <div className="truncate text-xs text-slate-400 leading-tight">
+                  {accessLevelLabel(user.access_level)}
+                </div>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={logout}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
+            <Icon name="LogOut" size={16} />
+            Выйти из аккаунта
+          </button>
         </div>
       </aside>
 
