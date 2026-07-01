@@ -178,19 +178,33 @@ export default function SemiGroupWizard({ open, onClose }: Props) {
             <div className="text-sm font-semibold text-slate-700">
               2. Размеры {checkedSizes.size > 0 && `(выбрано: ${checkedSizes.size})`}
             </div>
-            {productId && sizes.length > 0 && (
-              <div className="flex gap-2 text-xs">
-                <button onClick={allSizes} className="text-blue-600 hover:underline">Все</button>
-                <button onClick={noSizes} className="text-slate-400 hover:underline">Сбросить</button>
-              </div>
-            )}
+            <div className="flex gap-2 text-xs">
+              <button onClick={() => toggleSize("Универсальный")} className="text-emerald-600 hover:underline">
+                + Универсальный
+              </button>
+              {productId && sizes.length > 0 && (
+                <>
+                  <button onClick={allSizes} className="text-blue-600 hover:underline">Все</button>
+                  <button onClick={noSizes} className="text-slate-400 hover:underline">Сбросить</button>
+                </>
+              )}
+            </div>
           </div>
           {!productId ? (
             <p className="text-xs text-slate-400">Сначала выберите модель</p>
-          ) : sizes.length === 0 ? (
-            <p className="text-xs text-slate-400">У модели нет размеров</p>
           ) : (
             <div className="grid max-h-40 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3">
+              {checkedSizes.has("Универсальный") && (
+                <label className="flex cursor-pointer items-center gap-2 rounded bg-emerald-50 px-2 py-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked
+                    onChange={() => toggleSize("Универсальный")}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="font-medium text-emerald-700">Универсальный</span>
+                </label>
+              )}
               {sizes.map((s) => (
                 <label
                   key={s.id}
@@ -205,6 +219,11 @@ export default function SemiGroupWizard({ open, onClose }: Props) {
                   <span className="text-slate-700">{s.size_label}</span>
                 </label>
               ))}
+              {sizes.length === 0 && !checkedSizes.has("Универсальный") && (
+                <p className="col-span-full text-xs text-slate-400">
+                  У модели нет размеров — используйте «Универсальный»
+                </p>
+              )}
             </div>
           )}
         </div>

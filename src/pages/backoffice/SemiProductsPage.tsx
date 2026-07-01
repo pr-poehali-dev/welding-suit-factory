@@ -191,7 +191,7 @@ export default function SemiProductsPage() {
         <h1 className="text-2xl font-bold text-slate-800">Полуфабрикаты</h1>
         <div className="flex gap-2">
           <Button onClick={() => setWizardOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Icon name="Wand2" size={16} /> Мастер группы
+            <Icon name="Wand2" size={16} /> Мастер создания ПФ модели
           </Button>
           <Button onClick={openNew} variant="outline" className="gap-1.5 border-slate-300 text-slate-600">
             <Icon name="Plus" size={16} /> Добавить
