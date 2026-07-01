@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { boFetch, Group } from "@/pages/backoffice/types";
 import Icon from "@/components/ui/icon";
@@ -126,6 +126,47 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
   const [name, setName] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
+  /* --- изменяемая ширина панели --- */
+  const STORAGE_KEY = `bo-group-width-${entityType}`;
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    return saved ? Number(saved) : 224;
+  });
+  const draggingRef = useRef(false);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      setPanelWidth((prev) => {
+        const next = Math.min(500, Math.max(180, prev + e.movementX));
+        return next;
+      });
+    };
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(panelWidth));
+  }, [panelWidth, STORAGE_KEY]);
+
   const { data: groups = [] } = useQuery<Group[]>({
     queryKey: ["bo-groups", entityType],
     queryFn: () => boFetch("groups", "GET", undefined, { entity_type: entityType }),
@@ -213,8 +254,8 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
   const parentName = parentIdForNew ? groups.find((g) => g.id === parentIdForNew)?.name : null;
 
   return (
-    <div className="w-56 shrink-0">
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <div className="relative flex shrink-0" style={{ width: `${panelWidth}px` }}>
+      <div className="flex-1 min-w-0 rounded-lg border border-slate-200 bg-white overflow-hidden">
         <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Группы</span>
           <Button
@@ -276,6 +317,15 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
             </button>
           )}
         </div>
+      </div>
+
+      {/* ручка изменения ширины */}
+      <div
+        onMouseDown={startResize}
+        title="Потяните, чтобы изменить ширину"
+        className="group/resize absolute right-0 top-0 h-full w-2 -mr-1 cursor-col-resize flex items-center justify-center"
+      >
+        <div className="h-10 w-1 rounded-full bg-slate-200 transition-colors group-hover/resize:bg-blue-400" />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
