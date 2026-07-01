@@ -253,6 +253,8 @@ export interface SemiProductOperation {
   has_material_norm?: boolean;
 }
 
+export type PfType = "material" | "labor" | "fittings";
+
 export interface SemiProduct {
   id: number;
   name: string;
@@ -261,9 +263,42 @@ export interface SemiProduct {
   is_active: boolean;
   group_id: number | null;
   group_name?: string;
+  parent_group_name?: string;
+  pf_type?: PfType;
+  size_label?: string | null;
+  product_id?: number | null;
   materials: SemiProductMaterial[];
   operations: SemiProductOperation[];
 }
+
+export interface StockMaterial {
+  id: number;
+  name: string;
+  sku: string;
+  price_per_unit: number;
+  unit_id: number;
+  unit_short: string;
+  available_qty: number;
+}
+
+export interface CatalogProduct {
+  id: number;
+  name: string;
+  category: string;
+  base_price: number;
+  sizes_count: number;
+}
+
+export interface CatalogSize {
+  id: number;
+  size_label: string;
+}
+
+export const PF_TYPE_LABELS: Record<PfType, string> = {
+  material: "Материальный",
+  labor: "ФОТ (труд)",
+  fittings: "Фурнитура",
+};
 
 // -------------------- готовая продукция --------------------
 

@@ -106,6 +106,11 @@ ENTITY_MODULE = {
     "fittings": "fittings",
     "operations": "operations",
     "semi_products": "semi_products",
+    "semi_group_wizard": "semi_products",
+    "clone_semi_product": "semi_products",
+    "clone_semi_group": "semi_products",
+    "stock_materials": "semi_products",
+    "catalog_sizes": "semi_products",
     "finished_products": "finished_products",
     "sync_catalog": "finished_products",
     "catalog_products": "finished_products",
@@ -504,40 +509,48 @@ def update_operation(cur, oid, data):
 
 
 # ========== SEMI PRODUCTS ==========
+def _load_sp_details(cur, row):
+    cur.execute(f"""
+        SELECT spm.*, m.name as material_name, u.short_name as unit_short
+        FROM {SCHEMA}.semi_product_materials spm
+        JOIN {SCHEMA}.materials m ON spm.material_id = m.id
+        LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+        WHERE spm.semi_product_id = %s
+    """, (row["id"],))
+    mc = [d[0] for d in cur.description]
+    row["materials"] = [dict(zip(mc, r)) for r in cur.fetchall()]
+    cur.execute(f"""
+        SELECT spo.*, o.name as operation_name, o.has_material_norm
+        FROM {SCHEMA}.semi_product_operations spo
+        JOIN {SCHEMA}.operations o ON spo.operation_id = o.id
+        WHERE spo.semi_product_id = %s ORDER BY spo.sort_order
+    """, (row["id"],))
+    oc = [d[0] for d in cur.description]
+    row["operations"] = [dict(zip(oc, r)) for r in cur.fetchall()]
+    return row
+
+
 def list_semi_products(cur):
     cur.execute(f"""
-        SELECT sp.*, g.name as group_name
+        SELECT sp.*, g.name as group_name, pg.name as parent_group_name
         FROM {SCHEMA}.semi_products sp
         LEFT JOIN {SCHEMA}.groups g ON sp.group_id = g.id
+        LEFT JOIN {SCHEMA}.groups pg ON g.parent_id = pg.id
+        WHERE sp.sku IS DISTINCT FROM '__DEFAULT__'
         ORDER BY sp.name
     """)
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for row in rows:
-        cur.execute(f"""
-            SELECT spm.*, m.name as material_name, u.short_name as unit_short
-            FROM {SCHEMA}.semi_product_materials spm
-            JOIN {SCHEMA}.materials m ON spm.material_id = m.id
-            LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
-            WHERE spm.semi_product_id = %s
-        """, (row["id"],))
-        mc = [d[0] for d in cur.description]
-        row["materials"] = [dict(zip(mc, r)) for r in cur.fetchall()]
-        cur.execute(f"""
-            SELECT spo.*, o.name as operation_name, o.has_material_norm
-            FROM {SCHEMA}.semi_product_operations spo
-            JOIN {SCHEMA}.operations o ON spo.operation_id = o.id
-            WHERE spo.semi_product_id = %s ORDER BY spo.sort_order
-        """, (row["id"],))
-        oc = [d[0] for d in cur.description]
-        row["operations"] = [dict(zip(oc, r)) for r in cur.fetchall()]
+        _load_sp_details(cur, row)
     return rows
 
 
 def create_semi_product(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id) VALUES (%s,%s,%s,%s) RETURNING *",
-        (data["name"], data.get("sku"), data.get("description"), data.get("group_id"))
+        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("sku"), data.get("description"), data.get("group_id"),
+         data.get("pf_type", "material"), data.get("size_label"), data.get("product_id"))
     )
     cols = [d[0] for d in cur.description]
     sp = dict(zip(cols, cur.fetchone()))
@@ -556,14 +569,28 @@ def create_semi_product(cur, data):
 
 def update_semi_product(cur, spid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.semi_products SET name=%s, sku=%s, description=%s, is_active=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data["name"], data.get("sku"), data.get("description"), data.get("is_active", True), data.get("group_id"), spid)
+        f"UPDATE {SCHEMA}.semi_products SET name=%s, sku=%s, description=%s, is_active=%s, group_id=%s, pf_type=COALESCE(%s, pf_type), size_label=%s, updated_at=now() WHERE id=%s RETURNING *",
+        (data["name"], data.get("sku"), data.get("description"), data.get("is_active", True),
+         data.get("group_id"), data.get("pf_type"), data.get("size_label"), spid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
     if not row:
         return None
     sp = dict(zip(cols, row))
+    if "materials" in data:
+        # удаляем строки, которых больше нет
+        sent_ids = {m["id"] for m in data["materials"] if m.get("id")}
+        cur.execute(f"SELECT id FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (spid,))
+        for (mid,) in cur.fetchall():
+            if mid not in sent_ids:
+                cur.execute(f"DELETE FROM {SCHEMA}.semi_product_materials WHERE id=%s", (mid,))
+    if "operations" in data:
+        sent_ops = {o["id"] for o in data["operations"] if o.get("id")}
+        cur.execute(f"SELECT id FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (spid,))
+        for (oid,) in cur.fetchall():
+            if oid not in sent_ops:
+                cur.execute(f"DELETE FROM {SCHEMA}.semi_product_operations WHERE id=%s", (oid,))
     if "materials" in data:
         cur.execute(f"SELECT id FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (spid,))
         existing = {r[0] for r in cur.fetchall()}
@@ -595,6 +622,168 @@ def update_semi_product(cur, spid, data):
                     (spid, op["operation_id"], op.get("labor_cost", 0), op.get("sort_order", 0), op.get("notes"))
                 )
     return sp
+
+
+def delete_semi_product(cur, spid):
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.work_orders WHERE semi_product_id=%s", (spid,))
+    if cur.fetchone()[0] > 0:
+        raise WorkerValidationError("Нельзя удалить: полуфабрикат используется в заказ-нарядах")
+    cur.execute(f"DELETE FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (spid,))
+    cur.execute(f"DELETE FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (spid,))
+    cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE semi_product_id=%s", (spid,))
+    cur.execute(f"DELETE FROM {SCHEMA}.semi_products WHERE id=%s RETURNING id", (spid,))
+    row = cur.fetchone()
+    return {"deleted": spid} if row else None
+
+
+def _clone_semi_product(cur, spid, overrides=None):
+    """Копирует полуфабрикат со всеми материалами и операциями."""
+    overrides = overrides or {}
+    cur.execute(f"SELECT * FROM {SCHEMA}.semi_products WHERE id=%s", (spid,))
+    cols = [d[0] for d in cur.description]
+    src = cur.fetchone()
+    if not src:
+        return None
+    src = dict(zip(cols, src))
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id, is_active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        (
+            overrides.get("name", src["name"] + " (копия)"),
+            overrides.get("sku", src.get("sku")),
+            src.get("description"),
+            overrides.get("group_id", src.get("group_id")),
+            src.get("pf_type", "material"),
+            overrides.get("size_label", src.get("size_label")),
+            src.get("product_id"),
+            True,
+        )
+    )
+    new_id = cur.fetchone()[0]
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.semi_product_materials (semi_product_id, material_id, norm_qty, notes)
+        SELECT %s, material_id, norm_qty, notes FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s
+    """, (new_id, spid))
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.semi_product_operations (semi_product_id, operation_id, labor_cost, sort_order, notes)
+        SELECT %s, operation_id, labor_cost, sort_order, notes FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s
+    """, (new_id, spid))
+    cur.execute(f"SELECT * FROM {SCHEMA}.semi_products WHERE id=%s", (new_id,))
+    ncols = [d[0] for d in cur.description]
+    return _load_sp_details(cur, dict(zip(ncols, cur.fetchone())))
+
+
+def clone_semi_product(cur, data):
+    return _clone_semi_product(cur, data["id"], {
+        k: v for k, v in {
+            "name": data.get("name"),
+            "sku": data.get("sku"),
+            "size_label": data.get("size_label"),
+            "group_id": data.get("group_id"),
+        }.items() if v is not None
+    })
+
+
+def clone_semi_group(cur, data):
+    """Копирует группу со всеми полуфабрикатами внутри (и подгруппами)."""
+    src_group_id = data["group_id"]
+    new_name = data.get("name")
+    cur.execute(f"SELECT * FROM {SCHEMA}.groups WHERE id=%s", (src_group_id,))
+    gcols = [d[0] for d in cur.description]
+    grow = cur.fetchone()
+    if not grow:
+        return None
+    grp = dict(zip(gcols, grow))
+
+    def copy_group(old_id, parent_id, name_override=None):
+        cur.execute(f"SELECT * FROM {SCHEMA}.groups WHERE id=%s", (old_id,))
+        c = [d[0] for d in cur.description]
+        g = dict(zip(c, cur.fetchone()))
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.groups (entity_type, name, sort_order, parent_id) VALUES (%s,%s,%s,%s) RETURNING id",
+            (g["entity_type"], name_override or g["name"], g.get("sort_order", 0), parent_id)
+        )
+        new_gid = cur.fetchone()[0]
+        # копируем полуфабрикаты этой группы (имена сохраняем)
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.semi_products WHERE group_id=%s", (old_id,))
+        for (sp_id, sp_name) in cur.fetchall():
+            _clone_semi_product(cur, sp_id, {"group_id": new_gid, "name": sp_name})
+        # рекурсивно копируем подгруппы
+        cur.execute(f"SELECT id FROM {SCHEMA}.groups WHERE parent_id=%s AND is_active=true", (old_id,))
+        for (child_id,) in cur.fetchall():
+            copy_group(child_id, new_gid)
+        return new_gid
+
+    new_root = copy_group(src_group_id, grp.get("parent_id"), new_name)
+    return {"new_group_id": new_root}
+
+
+def list_stock_materials(cur, warehouse_id=None):
+    """Материалы с остатками со склада (для подбора спецификации)."""
+    params = []
+    stock_join = f"LEFT JOIN {SCHEMA}.stock s ON s.item_type='material' AND s.item_id = m.id"
+    if warehouse_id:
+        stock_join += " AND s.warehouse_id=%s"
+        params.append(warehouse_id)
+    sql = f"""
+        SELECT m.id, m.name, m.sku, m.price_per_unit, m.unit_id,
+               u.short_name as unit_short,
+               COALESCE(SUM(s.qty - s.reserved_qty), 0) as available_qty
+        FROM {SCHEMA}.materials m
+        LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+        {stock_join}
+        WHERE m.is_active = true
+        GROUP BY m.id, m.name, m.sku, m.price_per_unit, m.unit_id, u.short_name
+        ORDER BY m.name
+    """
+    cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+PF_TYPE_DEFAULTS = {
+    "leather_cut": {"name": "Крой кожа", "pf_type": "material"},
+    "layers_cut": {"name": "Крой настилы", "pf_type": "material"},
+    "fittings": {"name": "Фурнитура", "pf_type": "fittings"},
+}
+
+
+def create_semi_group_wizard(cur, data):
+    """Мастер: создаёт группу по артикулу, подгруппы по размерам и набор п/ф в каждом размере.
+    data = {product_id, article, sizes: [str], sets: [{name, pf_type}]}"""
+    article = data.get("article") or "Артикул"
+    product_id = data.get("product_id")
+    sizes = data.get("sizes") or []
+    sets = data.get("sets") or []
+    if not sizes:
+        raise WorkerValidationError("Выберите хотя бы один размер")
+    if not sets:
+        raise WorkerValidationError("Выберите хотя бы один полуфабрикат для набора")
+
+    # корневая группа = артикул
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.groups (entity_type, name, sort_order, parent_id) VALUES ('semi_products', %s, 0, NULL) RETURNING id",
+        (article,)
+    )
+    root_gid = cur.fetchone()[0]
+
+    created_count = 0
+    for idx, size in enumerate(sizes):
+        # подгруппа = размер
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.groups (entity_type, name, sort_order, parent_id) VALUES ('semi_products', %s, %s, %s) RETURNING id",
+            (str(size), idx, root_gid)
+        )
+        size_gid = cur.fetchone()[0]
+        for s_idx, item in enumerate(sets):
+            pf_name = item.get("name")
+            pf_type = item.get("pf_type", "material")
+            sku = f"{article}-{size}-{s_idx+1}"
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (f"{pf_name} {size}", sku, None, size_gid, pf_type, str(size), product_id)
+            )
+            created_count += 1
+    return {"group_id": root_gid, "article": article, "created": created_count}
 
 
 # ========== FINISHED PRODUCTS ==========
@@ -758,6 +947,18 @@ def list_catalog_products(cur):
         GROUP BY p.id, p.name, p.category, p.base_price
         ORDER BY p.category, p.name
     """)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def list_catalog_sizes(cur, product_id):
+    """Размерный ряд выбранной модели каталога."""
+    cur.execute(f"""
+        SELECT id, size_label
+        FROM {SCHEMA}.product_sizes
+        WHERE product_id = %s AND is_available = true
+        ORDER BY size_label
+    """, (product_id,))
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
@@ -1326,6 +1527,10 @@ def handler(event, context):
                 return ok(list_finished_products(cur))
             elif entity == "catalog_products":
                 return ok(list_catalog_products(cur))
+            elif entity == "catalog_sizes" and qs.get("product_id"):
+                return ok(list_catalog_sizes(cur, int(qs["product_id"])))
+            elif entity == "stock_materials":
+                return ok(list_stock_materials(cur, qs.get("warehouse_id")))
             elif entity == "stock":
                 return ok(list_stock(cur, qs.get("warehouse_id"), qs.get("item_type")))
             elif entity == "stock_movements":
@@ -1362,6 +1567,12 @@ def handler(event, context):
                 result = create_operation(cur, data)
             elif entity == "semi_products":
                 result = create_semi_product(cur, data)
+            elif entity == "semi_group_wizard":
+                result = create_semi_group_wizard(cur, data)
+            elif entity == "clone_semi_product":
+                result = clone_semi_product(cur, data)
+            elif entity == "clone_semi_group":
+                result = clone_semi_group(cur, data)
             elif entity == "finished_products":
                 result = create_finished_product(cur, data)
             elif entity == "sync_catalog":
@@ -1423,6 +1634,8 @@ def handler(event, context):
                 result = delete_group(cur, item_id)
             elif entity == "finished_products":
                 result = delete_finished_product(cur, item_id)
+            elif entity == "semi_products":
+                result = delete_semi_product(cur, item_id)
             elif entity == "workers":
                 cur.execute(f"DELETE FROM {SCHEMA}.worker_permissions WHERE worker_id=%s", (item_id,))
                 cur.execute(f"DELETE FROM {SCHEMA}.auth_sessions WHERE worker_id=%s", (item_id,))

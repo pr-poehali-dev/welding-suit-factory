@@ -5,11 +5,15 @@ import {
   SemiProduct,
   SemiProductMaterial,
   SemiProductOperation,
-  Material,
   Operation,
   Group,
+  StockMaterial,
+  PfType,
+  PF_TYPE_LABELS,
 } from "@/pages/backoffice/types";
 import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
+import MaterialPicker from "@/components/backoffice/MaterialPicker";
+import SemiGroupWizard from "@/components/backoffice/SemiGroupWizard";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,10 +29,15 @@ import {
 
 /* ---------- пустые шаблоны ---------- */
 const EMPTY_SP: Partial<SemiProduct> = {
-  name: "", sku: "", description: "", is_active: true, materials: [], operations: [], group_id: null,
+  name: "", sku: "", description: "", is_active: true, pf_type: "material", materials: [], operations: [], group_id: null,
 };
-const EMPTY_MAT: Partial<SemiProductMaterial> = { material_id: 0, norm_qty: 0, notes: "" };
 const EMPTY_OP: Partial<SemiProductOperation> = { operation_id: 0, labor_cost: 0, sort_order: 0, notes: "" };
+
+const PF_TYPE_BADGE: Record<PfType, string> = {
+  material: "bg-blue-100 text-blue-700",
+  labor: "bg-orange-100 text-orange-700",
+  fittings: "bg-purple-100 text-purple-700",
+};
 
 export default function SemiProductsPage() {
   const qc = useQueryClient();
@@ -37,15 +46,13 @@ export default function SemiProductsPage() {
   const [matRows, setMatRows] = useState<Partial<SemiProductMaterial>[]>([]);
   const [opRows, setOpRows] = useState<Partial<SemiProductOperation>[]>([]);
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   /* --- данные --- */
   const { data: items = [], isLoading } = useQuery<SemiProduct[]>({
     queryKey: ["bo-semi-products"],
     queryFn: () => boFetch("semi_products"),
-  });
-  const { data: materials = [] } = useQuery<Material[]>({
-    queryKey: ["bo-materials"],
-    queryFn: () => boFetch("materials"),
   });
   const { data: operations = [] } = useQuery<Operation[]>({
     queryKey: ["bo-operations"],
@@ -81,6 +88,39 @@ export default function SemiProductsPage() {
     onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
   });
 
+  const cloneSp = useMutation({
+    mutationFn: (sp: SemiProduct) => {
+      const name = window.prompt("Название копии:", sp.name + " (копия)");
+      if (name === null) return Promise.reject(new Error("cancel"));
+      return boFetch("clone_semi_product", "POST", { id: sp.id, name, group_id: sp.group_id });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bo-semi-products"] });
+      toast({ title: "Полуфабрикат скопирован" });
+    },
+    onError: (e: Error) => {
+      if (e.message !== "cancel")
+        toast({ title: "Ошибка", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const cloneGroup = useMutation({
+    mutationFn: (groupId: number) => {
+      const name = window.prompt("Название новой группы:");
+      if (name === null || !name.trim()) return Promise.reject(new Error("cancel"));
+      return boFetch("clone_semi_group", "POST", { group_id: groupId, name: name.trim() });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bo-semi-products"] });
+      qc.invalidateQueries({ queryKey: ["bo-groups", "semi_products"] });
+      toast({ title: "Группа скопирована" });
+    },
+    onError: (e: Error) => {
+      if (e.message !== "cancel")
+        toast({ title: "Ошибка", description: e.message, variant: "destructive" });
+    },
+  });
+
   /* --- helpers --- */
   const openNew = () => {
     setForm(EMPTY_SP);
@@ -90,10 +130,21 @@ export default function SemiProductsPage() {
   };
 
   const openEdit = (sp: SemiProduct) => {
-    setForm({ id: sp.id, name: sp.name, sku: sp.sku, description: sp.description, is_active: sp.is_active, group_id: sp.group_id ?? null });
+    setForm({
+      id: sp.id, name: sp.name, sku: sp.sku, description: sp.description,
+      is_active: sp.is_active, group_id: sp.group_id ?? null,
+      pf_type: sp.pf_type ?? "material", size_label: sp.size_label,
+    });
     setMatRows(sp.materials?.map((m) => ({ ...m })) ?? []);
     setOpRows(sp.operations?.map((o) => ({ ...o })) ?? []);
     setOpen(true);
+  };
+
+  const addPickedMaterial = (m: StockMaterial, norm: number) => {
+    setMatRows((prev) => [
+      ...prev,
+      { material_id: m.id, norm_qty: norm, notes: "", material_name: m.name, unit_short: m.unit_short },
+    ]);
   };
 
   /* --- row helpers --- */
@@ -138,15 +189,33 @@ export default function SemiProductsPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Полуфабрикаты</h1>
-        <Button onClick={openNew} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
-          <Icon name="Plus" size={16} /> Добавить
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setWizardOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Icon name="Wand2" size={16} /> Мастер группы
+          </Button>
+          <Button onClick={openNew} variant="outline" className="gap-1.5 border-slate-300 text-slate-600">
+            <Icon name="Plus" size={16} /> Добавить
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4">
         <GroupManager entityType="semi_products" selectedGroupId={groupFilter} onSelect={setGroupFilter} counts={groupCounts} />
 
         <div className="flex-1 min-w-0">
+          {groupFilter !== null && groupFilter !== -1 && (
+            <div className="mb-2 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => cloneGroup.mutate(groupFilter)}
+                disabled={cloneGroup.isPending}
+                className="gap-1.5 border-slate-300 text-slate-600"
+              >
+                <Icon name="Copy" size={14} /> Копировать группу
+              </Button>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
           ) : (
@@ -155,33 +224,43 @@ export default function SemiProductsPage() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3">Название</th>
-                    <th className="px-4 py-3">Артикул</th>
-                    <th className="px-4 py-3">Материалов</th>
-                    <th className="px-4 py-3">Операций</th>
-                    <th className="px-4 py-3">Активен</th>
+                    <th className="px-4 py-3">Тип</th>
+                    <th className="px-4 py-3">Артикул / размер</th>
+                    <th className="px-4 py-3">Мат.</th>
+                    <th className="px-4 py-3">Опер.</th>
                     <th className="px-4 py-3 text-right">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((sp, i) => (
                     <tr key={sp.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                      <td className="px-4 py-2.5 font-medium text-slate-700">{sp.name}</td>
-                      <td className="px-4 py-2.5 font-mono text-slate-600">{sp.sku}</td>
-                      <td className="px-4 py-2.5 text-slate-600">{sp.materials?.length ?? 0}</td>
-                      <td className="px-4 py-2.5 text-slate-600">{sp.operations?.length ?? 0}</td>
-                      <td className="px-4 py-2.5">
-                        {sp.is_active ? (
-                          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
-                        ) : (
-                          <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Нет</span>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">
+                        {sp.name}
+                        {!sp.is_active && (
+                          <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-700">неактивен</span>
                         )}
                       </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`rounded px-2 py-0.5 text-xs ${PF_TYPE_BADGE[(sp.pf_type ?? "material") as PfType]}`}>
+                          {PF_TYPE_LABELS[(sp.pf_type ?? "material") as PfType]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500">
+                        {sp.parent_group_name && <div className="text-slate-700">{sp.parent_group_name}</div>}
+                        {sp.size_label && <div>{sp.size_label}</div>}
+                        {!sp.parent_group_name && !sp.size_label && <span className="font-mono">{sp.sku}</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">{sp.materials?.length ?? 0}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{sp.operations?.length ?? 0}</td>
                       <td className="px-4 py-2.5 text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(sp)}>
+                          <Button variant="ghost" size="sm" title="Редактировать" onClick={() => openEdit(sp)}>
                             <Icon name="Pencil" size={15} />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => remove.mutate(sp.id)}>
+                          <Button variant="ghost" size="sm" title="Копировать" onClick={() => cloneSp.mutate(sp)}>
+                            <Icon name="Copy" size={15} className="text-slate-500" />
+                          </Button>
+                          <Button variant="ghost" size="sm" title="Удалить" onClick={() => remove.mutate(sp.id)}>
                             <Icon name="Trash2" size={15} className="text-red-500" />
                           </Button>
                         </div>
@@ -221,18 +300,32 @@ export default function SemiProductsPage() {
               <label className="mb-1 block text-sm font-medium text-slate-600">Описание</label>
               <Textarea className="bg-white text-slate-800 border-slate-300" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
-                value={form.group_id ?? ""}
-                onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
-              >
-                <option value="">— без группы —</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Тип полуфабриката</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                  value={form.pf_type ?? "material"}
+                  onChange={(e) => setForm({ ...form, pf_type: e.target.value as PfType })}
+                >
+                  <option value="material">Материальный</option>
+                  <option value="labor">ФОТ (труд)</option>
+                  <option value="fittings">Фурнитура</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                  value={form.group_id ?? ""}
+                  onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
+                >
+                  <option value="">— без группы —</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
@@ -240,12 +333,12 @@ export default function SemiProductsPage() {
             </div>
           </div>
 
-          {/* --- Секция: Материалы --- */}
+          {/* --- Секция: Материалы (спецификация) --- */}
           <div className="mt-4 border-t border-slate-200 pt-4">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700">Материалы</h3>
-              <Button size="sm" variant="outline" onClick={() => setMatRows([...matRows, { ...EMPTY_MAT }])} className="gap-1 text-slate-600 border-slate-300">
-                <Icon name="Plus" size={14} /> Добавить материал
+              <h3 className="text-sm font-semibold text-slate-700">Спецификация (материалы)</h3>
+              <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} className="gap-1 text-slate-600 border-slate-300">
+                <Icon name="Search" size={14} /> Подобрать материал
               </Button>
             </div>
 
@@ -253,19 +346,12 @@ export default function SemiProductsPage() {
               <div key={idx} className="mb-2 flex items-end gap-2">
                 <div className="flex-1">
                   <label className="mb-1 block text-xs text-slate-500">Материал</label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800"
-                    value={row.material_id ?? 0}
-                    onChange={(e) => updateMat(idx, { material_id: Number(e.target.value) })}
-                  >
-                    <option value={0}>-- выберите --</option>
-                    {materials.filter((m) => m.is_active).map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700">
+                    {row.material_name || `#${row.material_id}`}
+                  </div>
                 </div>
                 <div className="w-28">
-                  <label className="mb-1 block text-xs text-slate-500">Норма</label>
+                  <label className="mb-1 block text-xs text-slate-500">Норма {row.unit_short ? `(${row.unit_short})` : ""}</label>
                   <Input
                     className="h-9 bg-white text-slate-800 border-slate-300"
                     type="number"
@@ -279,7 +365,7 @@ export default function SemiProductsPage() {
                 </Button>
               </div>
             ))}
-            {matRows.length === 0 && <p className="text-xs text-slate-400">Материалы не добавлены</p>}
+            {matRows.length === 0 && <p className="text-xs text-slate-400">Материалы не подобраны</p>}
           </div>
 
           {/* --- Секция: Операции (ФОТ) --- */}
@@ -341,6 +427,14 @@ export default function SemiProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MaterialPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={addPickedMaterial}
+      />
+
+      <SemiGroupWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }
