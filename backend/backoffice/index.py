@@ -970,36 +970,113 @@ def list_work_orders(cur, order_id=None, status=None):
     return rows
 
 
-def create_work_order(cur, data):
-    num = data.get("work_order_number") or ("ЗН-" + datetime.now().strftime("%y%m%d%H%M%S"))
+def _get_default_semi_product(cur):
+    """Служебный полуфабрикат-заглушка для изделий без явного состава."""
+    cur.execute(f"SELECT id FROM {SCHEMA}.semi_products WHERE sku='__DEFAULT__' LIMIT 1")
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description) VALUES (%s,%s,%s) RETURNING id",
+        ("Изделие (без полуфабрикатов)", "__DEFAULT__", "Автоматический полуфабрикат для изделий без состава")
+    )
+    return cur.fetchone()[0]
+
+
+def _create_single_work_order(cur, order_id, order_item_id, semi_product_id, qty, warehouse_id, overrides=None):
+    """Создаёт один заказ-наряд по полуфабрикату + его операции.
+    overrides: список {operation_id, material_id, planned_material_norm, labor_cost} для правки спецификации."""
+    num = "ЗН-" + datetime.now().strftime("%y%m%d%H%M%S%f")[:-3]
     cur.execute(
         f"INSERT INTO {SCHEMA}.work_orders (work_order_number, order_id, order_item_id, semi_product_id, qty, warehouse_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
-        (num, data["order_id"], data["order_item_id"], data["semi_product_id"], data.get("qty", 1), data.get("warehouse_id"))
+        (num, order_id, order_item_id, semi_product_id, qty, warehouse_id)
     )
     cols = [d[0] for d in cur.description]
     wo = dict(zip(cols, cur.fetchone()))
+
+    ov_map = {}
+    for o in (overrides or []):
+        if o.get("operation_id") is not None:
+            ov_map[int(o["operation_id"])] = o
+
+    # операции полуфабриката
     cur.execute(f"""
         SELECT spo.operation_id, spo.labor_cost, spo.sort_order, o.has_material_norm
         FROM {SCHEMA}.semi_product_operations spo
         JOIN {SCHEMA}.operations o ON spo.operation_id = o.id
         WHERE spo.semi_product_id = %s ORDER BY spo.sort_order
-    """, (data["semi_product_id"],))
+    """, (semi_product_id,))
     ops = cur.fetchall()
-    for op_row in ops:
-        op_id, lcost, sorder, has_norm = op_row
+
+    # если у полуфабриката нет своих операций — берём все активные операции (fallback)
+    if not ops:
+        cur.execute(f"""
+            SELECT id, COALESCE(default_price,0), COALESCE(sort_order,0), has_material_norm
+            FROM {SCHEMA}.operations WHERE is_active = true ORDER BY sort_order
+        """)
+        ops = cur.fetchall()
+
+    for op_id, lcost, sorder, has_norm in ops:
         mat_id = None
         planned_norm = None
+        # значения из спецификации полуфабриката
         if has_norm:
-            cur.execute(f"SELECT material_id, norm_qty FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s LIMIT 1", (data["semi_product_id"],))
+            cur.execute(f"SELECT material_id, norm_qty FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s LIMIT 1", (semi_product_id,))
             mat = cur.fetchone()
             if mat:
                 mat_id = mat[0]
-                planned_norm = float(mat[1]) * int(data.get("qty", 1))
+                planned_norm = float(mat[1]) * int(qty or 1)
+        # ручное переопределение технологом (выбор материала/нормы)
+        ov = ov_map.get(int(op_id))
+        if ov:
+            if ov.get("material_id") is not None:
+                mat_id = ov["material_id"]
+            if ov.get("planned_material_norm") is not None:
+                planned_norm = float(ov["planned_material_norm"])
+            if ov.get("labor_cost") is not None:
+                lcost = ov["labor_cost"]
         cur.execute(
             f"INSERT INTO {SCHEMA}.work_order_operations (work_order_id, operation_id, labor_cost, planned_material_norm, material_id, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
             (wo["id"], op_id, lcost, planned_norm, mat_id, sorder)
         )
     return wo
+
+
+def create_work_order(cur, data):
+    order_id = data["order_id"]
+    order_item_id = data["order_item_id"]
+    qty = int(data.get("qty", 1) or 1)
+    warehouse_id = data.get("warehouse_id")
+    overrides = data.get("operations") or data.get("overrides") or []
+
+    # если явно передан semi_product_id — старое поведение (один п/ф)
+    explicit_sp = data.get("semi_product_id")
+
+    # определяем изделие позиции заказа
+    fp_id = data.get("finished_product_id")
+    if not fp_id:
+        cur.execute(f"SELECT finished_product_id FROM {SCHEMA}.order_items WHERE id=%s", (order_item_id,))
+        r = cur.fetchone()
+        fp_id = r[0] if r else None
+
+    # берём полуфабрикаты из состава изделия
+    semi_ids = []
+    if not explicit_sp and fp_id:
+        cur.execute(f"SELECT semi_product_id, qty FROM {SCHEMA}.finished_product_semi WHERE finished_product_id=%s", (fp_id,))
+        semi_ids = [(row[0], float(row[1] or 1)) for row in cur.fetchall()]
+
+    created = []
+    if explicit_sp:
+        created.append(_create_single_work_order(cur, order_id, order_item_id, explicit_sp, qty, warehouse_id, overrides))
+    elif semi_ids:
+        for sp_id, sp_qty in semi_ids:
+            created.append(_create_single_work_order(cur, order_id, order_item_id, sp_id, int(qty * sp_qty), warehouse_id, overrides))
+    else:
+        # у изделия нет состава — создаём ЗН на изделие целиком со всеми операциями
+        default_sp = _get_default_semi_product(cur)
+        created.append(_create_single_work_order(cur, order_id, order_item_id, default_sp, qty, warehouse_id, overrides))
+
+    return created[0] if len(created) == 1 else {"created": created, "count": len(created)}
 
 
 def complete_work_order_operation(cur, woo_id, data):
