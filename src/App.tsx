@@ -29,6 +29,7 @@ import OrdersPage from "./pages/backoffice/OrdersPage";
 import ProductionPage from "./pages/backoffice/ProductionPage";
 import OverconsumptionReport from "./pages/backoffice/OverconsumptionReport";
 import CostReport from "./pages/backoffice/CostReport";
+import PeriodSettingsPage from "./pages/backoffice/PeriodSettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,7 @@ const App = () => (
             <Route path="/backoffice/production" element={<BO module="production"><ProductionPage /></BO>} />
             <Route path="/backoffice/reports/overconsumption" element={<BO module="reports"><OverconsumptionReport /></BO>} />
             <Route path="/backoffice/reports/cost" element={<BO module="reports"><CostReport /></BO>} />
+            <Route path="/backoffice/settings/period" element={<BO><PeriodSettingsPage /></BO>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

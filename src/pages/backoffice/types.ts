@@ -300,6 +300,12 @@ export const PF_TYPE_LABELS: Record<PfType, string> = {
   fittings: "Фурнитура",
 };
 
+export interface PeriodSettings {
+  lock_date: string | null;
+  auto_weekly: boolean;
+  last_auto_run: string | null;
+}
+
 // -------------------- готовая продукция --------------------
 
 export interface FinishedProductSemi {

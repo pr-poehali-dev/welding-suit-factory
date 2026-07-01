@@ -5,7 +5,7 @@
 import json
 import os
 import psycopg2
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 SCHEMA = "t_p87775074_welding_suit_factory"
 
@@ -125,6 +125,7 @@ ENTITY_MODULE = {
     "report_overconsumption": "reports",
     "report_cost": "reports",
     "groups": None,  # вспомогательное — доступно всем авторизованным
+    "period_settings": None,  # чтение всем; изменение проверяется отдельно (только директор)
 }
 
 
@@ -196,6 +197,93 @@ def save_worker_perms(cur, worker_id, perms):
         cur.execute(
             f"INSERT INTO {SCHEMA}.worker_permissions (worker_id, permission_key, allowed) VALUES (%s,%s,%s)",
             (worker_id, p["permission_key"], bool(p.get("allowed", True))),
+        )
+
+
+# ========== ЗАКРЫТИЕ ПЕРИОДА ==========
+class PeriodLockedError(Exception):
+    pass
+
+
+def get_period_settings(cur, run_auto=True):
+    """Возвращает настройки периода. При run_auto — выполняет еженедельное автозакрытие."""
+    cur.execute(f"SELECT id, lock_date, auto_weekly, last_auto_run FROM {SCHEMA}.period_settings WHERE id=1")
+    row = cur.fetchone()
+    if not row:
+        cur.execute(f"INSERT INTO {SCHEMA}.period_settings (id, auto_weekly) VALUES (1, true) RETURNING id, lock_date, auto_weekly, last_auto_run")
+        row = cur.fetchone()
+    settings = {"lock_date": row[1], "auto_weekly": row[2], "last_auto_run": row[3]}
+
+    # автозакрытие раз в неделю: закрываем всё старше 7 дней
+    if run_auto and settings["auto_weekly"]:
+        last = settings["last_auto_run"]
+        need_run = last is None or (datetime.now(last.tzinfo) - last).days >= 7
+        if need_run:
+            new_lock = (datetime.now() - timedelta(days=7)).date()
+            cur_lock = settings["lock_date"]
+            if cur_lock is None or new_lock > cur_lock:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.period_settings SET lock_date=%s, last_auto_run=now(), updated_at=now() WHERE id=1 RETURNING lock_date, last_auto_run",
+                    (new_lock,)
+                )
+                r2 = cur.fetchone()
+                settings["lock_date"] = r2[0]
+                settings["last_auto_run"] = r2[1]
+            else:
+                cur.execute(f"UPDATE {SCHEMA}.period_settings SET last_auto_run=now() WHERE id=1 RETURNING last_auto_run")
+                settings["last_auto_run"] = cur.fetchone()[0]
+
+    return {
+        "lock_date": settings["lock_date"].isoformat() if settings["lock_date"] else None,
+        "auto_weekly": settings["auto_weekly"],
+        "last_auto_run": settings["last_auto_run"].isoformat() if settings["last_auto_run"] else None,
+    }
+
+
+def update_period_settings(cur, data, user):
+    """Только директор может менять/снимать блокировку периода."""
+    if user.get("access_level") != "director":
+        raise WorkerValidationError("Изменять закрытие периода может только директор")
+    fields, params = [], []
+    if "lock_date" in data:
+        fields.append("lock_date=%s")
+        params.append(data["lock_date"] or None)
+    if "auto_weekly" in data:
+        fields.append("auto_weekly=%s")
+        params.append(bool(data["auto_weekly"]))
+    fields.append("updated_by=%s")
+    params.append(user["id"])
+    fields.append("updated_at=now()")
+    cur.execute(f"UPDATE {SCHEMA}.period_settings SET {', '.join(fields)} WHERE id=1", params)
+    return get_period_settings(cur, run_auto=False)
+
+
+def _get_lock_date(cur):
+    cur.execute(f"SELECT lock_date FROM {SCHEMA}.period_settings WHERE id=1")
+    row = cur.fetchone()
+    return row[0] if row and row[0] else None
+
+
+def _parse_date(val):
+    if not val:
+        return None
+    if isinstance(val, (datetime,)):
+        return val.date()
+    try:
+        return datetime.fromisoformat(str(val)[:10]).date()
+    except Exception:
+        return None
+
+
+def assert_period_open(cur, doc_date):
+    """Бросает ошибку, если дата документа попадает в закрытый период."""
+    lock = _get_lock_date(cur)
+    if lock is None:
+        return
+    d = _parse_date(doc_date)
+    if d is not None and d <= lock:
+        raise PeriodLockedError(
+            f"Период до {lock.isoformat()} закрыт для редактирования. Обратитесь к директору для снятия блокировки."
         )
     return {"ok": True, "count": len(perms)}
 
@@ -1076,6 +1164,15 @@ def list_stock(cur, warehouse_id=None, item_type=None):
 
 
 def stock_movement(cur, data):
+    # движение склада датируется текущей датой — блокируем, если сегодня в закрытом периоде
+    assert_period_open(cur, datetime.now().date())
+    # если движение привязано к заказу — проверяем дату заказа
+    rel_order = data.get("related_order_id")
+    if rel_order:
+        cur.execute(f"SELECT deadline, created_at FROM {SCHEMA}.orders WHERE id=%s", (rel_order,))
+        r = cur.fetchone()
+        if r:
+            assert_period_open(cur, r[0] or r[1])
     wid = data["warehouse_id"]
     itype = data["item_type"]
     iid = data["item_id"]
@@ -1178,7 +1275,15 @@ def create_order(cur, data):
     return order
 
 
+def _assert_order_period(cur, oid):
+    cur.execute(f"SELECT deadline, created_at FROM {SCHEMA}.orders WHERE id=%s", (oid,))
+    r = cur.fetchone()
+    if r:
+        assert_period_open(cur, r[0] or r[1])
+
+
 def update_order_status(cur, oid, status):
+    _assert_order_period(cur, oid)
     cur.execute(f"UPDATE {SCHEMA}.orders SET status=%s, updated_at=now() WHERE id=%s RETURNING *", (status, oid))
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -1186,6 +1291,7 @@ def update_order_status(cur, oid, status):
 
 
 def update_order(cur, oid, data):
+    _assert_order_period(cur, oid)
     # если пришёл только статус — обновляем статус
     if "status" in data and not any(
         k in data for k in ("client_id", "manager_name", "priority", "deadline", "notes", "items")
@@ -1333,6 +1439,7 @@ def _create_single_work_order(cur, order_id, order_item_id, semi_product_id, qty
 
 def create_work_order(cur, data):
     order_id = data["order_id"]
+    _assert_order_period(cur, order_id)
     order_item_id = data["order_item_id"]
     qty = int(data.get("qty", 1) or 1)
     warehouse_id = data.get("warehouse_id")
@@ -1370,6 +1477,17 @@ def create_work_order(cur, data):
 
 def complete_work_order_operation(cur, woo_id, data):
     """Работник закрывает операцию в заказ-наряде"""
+    # проверка закрытого периода по дате связанного заказа
+    cur.execute(f"""
+        SELECT o.deadline, o.created_at
+        FROM {SCHEMA}.work_order_operations woo
+        JOIN {SCHEMA}.work_orders wo ON woo.work_order_id = wo.id
+        JOIN {SCHEMA}.orders o ON wo.order_id = o.id
+        WHERE woo.id = %s
+    """, (woo_id,))
+    r = cur.fetchone()
+    if r:
+        assert_period_open(cur, r[0] or r[1])
     worker_id = data.get("worker_id")
     actual_norm = data.get("actual_material_norm")
     cur.execute(
@@ -1633,6 +1751,10 @@ def handler(event, context):
                 return ok(report_overconsumption(cur))
             elif entity == "report_cost" and qs.get("order_id"):
                 return ok(report_cost(cur, int(qs["order_id"])))
+            elif entity == "period_settings":
+                result = get_period_settings(cur, run_auto=True)
+                conn.commit()
+                return ok(result)
             else:
                 return ok({"entities": ["groups","units","warehouses","clients","workers","materials","fittings","operations","semi_products","finished_products","stock","stock_movements","orders","work_orders","pending_operations","report_overconsumption","report_cost"]})
 
@@ -1681,6 +1803,10 @@ def handler(event, context):
             return ok(result, 201)
 
         if method == "PUT":
+            if entity == "period_settings":
+                result = update_period_settings(cur, data, user)
+                conn.commit()
+                return ok(result)
             item_id = int(qs.get("id", 0) or data.get("id", 0))
             if not item_id:
                 return err("id required")
@@ -1745,6 +1871,9 @@ def handler(event, context):
 
         return err("Method not allowed", 405)
 
+    except PeriodLockedError as e:
+        conn.rollback()
+        return err(str(e), 423)
     except WorkerValidationError as e:
         conn.rollback()
         return err(str(e), 400)

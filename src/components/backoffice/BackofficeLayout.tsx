@@ -11,6 +11,7 @@ interface NavItem {
   icon: string;
   path?: string;
   module?: string;
+  directorOnly?: boolean;
   children?: NavItem[];
 }
 
@@ -68,6 +69,18 @@ const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
+  {
+    label: "Настройки",
+    icon: "Settings2",
+    children: [
+      {
+        label: "Закрытие периода",
+        icon: "Lock",
+        path: "/backoffice/settings/period",
+        directorOnly: true,
+      },
+    ],
+  },
 ];
 
 /* ---------- компонент ---------- */
@@ -82,6 +95,7 @@ export default function BackofficeLayout({ children }: BackofficeLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   /* --- фильтрация меню по правам --- */
+  const isDirector = user?.access_level === "director";
   const filterNav = (items: NavItem[]): NavItem[] =>
     items
       .map((item) => {
@@ -89,6 +103,7 @@ export default function BackofficeLayout({ children }: BackofficeLayoutProps) {
           const children = filterNav(item.children);
           return children.length ? { ...item, children } : null;
         }
+        if (item.directorOnly && !isDirector) return null;
         if (item.module && !canModule(item.module)) return null;
         return item;
       })
