@@ -147,12 +147,12 @@ export default function SemiGroupWizard({ open, onClose }: Props) {
                 key={p.id}
                 type="button"
                 onClick={() => pickProduct(p)}
-                className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm ${
+                className={`flex w-full items-start justify-between gap-2 px-3 py-1.5 text-left text-sm ${
                   productId === p.id ? "bg-blue-50 text-blue-700" : "hover:bg-slate-50 text-slate-700"
                 }`}
               >
-                <span className="truncate">{p.name}</span>
-                <span className="ml-2 flex-shrink-0 text-xs text-slate-400">
+                <span className="break-words whitespace-normal">{p.name}</span>
+                <span className="flex-shrink-0 whitespace-nowrap text-xs text-slate-400">
                   {p.sizes_count} разм.
                 </span>
               </button>
