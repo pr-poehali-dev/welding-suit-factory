@@ -253,7 +253,7 @@ export interface SemiProductOperation {
   has_material_norm?: boolean;
 }
 
-export type PfType = "material" | "labor" | "fittings";
+export type PfType = "material" | "labor" | "fittings" | "composite";
 
 export interface SemiProduct {
   id: number;
@@ -269,6 +269,7 @@ export interface SemiProduct {
   product_id?: number | null;
   materials: SemiProductMaterial[];
   operations: SemiProductOperation[];
+  components?: SemiProductComponent[];
 }
 
 export interface StockMaterial {
@@ -298,7 +299,19 @@ export const PF_TYPE_LABELS: Record<PfType, string> = {
   material: "Материальный",
   labor: "ФОТ (труд)",
   fittings: "Фурнитура",
+  composite: "Составной",
 };
+
+export interface SemiProductComponent {
+  id?: number;
+  parent_id?: number;
+  component_id: number;
+  qty: number;
+  notes?: string;
+  component_name?: string;
+  component_type?: PfType;
+  component_sku?: string;
+}
 
 export interface PeriodSettings {
   lock_date: string | null;

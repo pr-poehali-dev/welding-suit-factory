@@ -37,6 +37,7 @@ const PF_TYPE_BADGE: Record<PfType, string> = {
   material: "bg-blue-100 text-blue-700",
   labor: "bg-orange-100 text-orange-700",
   fittings: "bg-purple-100 text-purple-700",
+  composite: "bg-emerald-100 text-emerald-700",
 };
 
 export default function SemiProductsPage() {

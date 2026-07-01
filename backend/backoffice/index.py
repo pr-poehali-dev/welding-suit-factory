@@ -700,6 +700,15 @@ def _load_sp_details(cur, row):
     """, (row["id"],))
     oc = [d[0] for d in cur.description]
     row["operations"] = [dict(zip(oc, r)) for r in cur.fetchall()]
+    # вложенные полуфабрикаты (для составных)
+    cur.execute(f"""
+        SELECT spc.*, sp.name as component_name, sp.pf_type as component_type, sp.sku as component_sku
+        FROM {SCHEMA}.semi_product_components spc
+        JOIN {SCHEMA}.semi_products sp ON spc.component_id = sp.id
+        WHERE spc.parent_id = %s
+    """, (row["id"],))
+    cc = [d[0] for d in cur.description]
+    row["components"] = [dict(zip(cc, r)) for r in cur.fetchall()]
     return row
 
 
@@ -737,6 +746,12 @@ def create_semi_product(cur, data):
             f"INSERT INTO {SCHEMA}.semi_product_operations (semi_product_id, operation_id, labor_cost, sort_order, notes) VALUES (%s,%s,%s,%s,%s)",
             (sp["id"], op["operation_id"], op.get("labor_cost", 0), op.get("sort_order", 0), op.get("notes"))
         )
+    for comp in data.get("components", []):
+        if comp.get("component_id") and comp["component_id"] != sp["id"]:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.semi_product_components (parent_id, component_id, qty) VALUES (%s,%s,%s) ON CONFLICT (parent_id, component_id) DO NOTHING",
+                (sp["id"], comp["component_id"], comp.get("qty", 1))
+            )
     return sp
 
 
@@ -794,6 +809,27 @@ def update_semi_product(cur, spid, data):
                     f"INSERT INTO {SCHEMA}.semi_product_operations (semi_product_id, operation_id, labor_cost, sort_order, notes) VALUES (%s,%s,%s,%s,%s)",
                     (spid, op["operation_id"], op.get("labor_cost", 0), op.get("sort_order", 0), op.get("notes"))
                 )
+    if "components" in data:
+        sent = {(c["component_id"]) for c in data["components"] if c.get("component_id")}
+        cur.execute(f"SELECT component_id FROM {SCHEMA}.semi_product_components WHERE parent_id=%s", (spid,))
+        existing_comp = {r[0] for r in cur.fetchall()}
+        for comp in data["components"]:
+            cid = comp.get("component_id")
+            if not cid or cid == spid:
+                continue
+            if cid in existing_comp:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.semi_product_components SET qty=%s WHERE parent_id=%s AND component_id=%s",
+                    (comp.get("qty", 1), spid, cid)
+                )
+            else:
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.semi_product_components (parent_id, component_id, qty) VALUES (%s,%s,%s) ON CONFLICT (parent_id, component_id) DO NOTHING",
+                    (spid, cid, comp.get("qty", 1))
+                )
+        for old_cid in existing_comp:
+            if old_cid not in sent:
+                cur.execute(f"DELETE FROM {SCHEMA}.semi_product_components WHERE parent_id=%s AND component_id=%s", (spid, old_cid))
     return sp
 
 
@@ -801,6 +837,10 @@ def delete_semi_product(cur, spid):
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.work_orders WHERE semi_product_id=%s", (spid,))
     if cur.fetchone()[0] > 0:
         raise WorkerValidationError("Нельзя удалить: полуфабрикат используется в заказ-нарядах")
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.semi_product_components WHERE component_id=%s", (spid,))
+    if cur.fetchone()[0] > 0:
+        raise WorkerValidationError("Нельзя удалить: полуфабрикат входит в состав другого (составного) полуфабриката")
+    cur.execute(f"DELETE FROM {SCHEMA}.semi_product_components WHERE parent_id=%s", (spid,))
     cur.execute(f"DELETE FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (spid,))
     cur.execute(f"DELETE FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (spid,))
     cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE semi_product_id=%s", (spid,))
@@ -839,6 +879,10 @@ def _clone_semi_product(cur, spid, overrides=None):
     cur.execute(f"""
         INSERT INTO {SCHEMA}.semi_product_operations (semi_product_id, operation_id, labor_cost, sort_order, notes)
         SELECT %s, operation_id, labor_cost, sort_order, notes FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s
+    """, (new_id, spid))
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.semi_product_components (parent_id, component_id, qty, notes)
+        SELECT %s, component_id, qty, notes FROM {SCHEMA}.semi_product_components WHERE parent_id=%s
     """, (new_id, spid))
     cur.execute(f"SELECT * FROM {SCHEMA}.semi_products WHERE id=%s", (new_id,))
     ncols = [d[0] for d in cur.description]
@@ -922,7 +966,9 @@ PF_TYPE_DEFAULTS = {
 
 def create_semi_group_wizard(cur, data):
     """Мастер: создаёт группу по артикулу, подгруппы по размерам и набор п/ф в каждом размере.
-    data = {product_id, article, sizes: [str], sets: [{name, pf_type}]}"""
+    data = {product_id, article, sizes: [str], sets: [{name, pf_type, components:[{set_index?, semi_product_id?, qty}]}]}
+    Составной п/ф (pf_type='composite') может включать другие п/ф набора (по set_index)
+    и существующие п/ф из базы (по semi_product_id)."""
     article = data.get("article") or "Артикул"
     product_id = data.get("product_id")
     sizes = data.get("sizes") or []
@@ -947,6 +993,9 @@ def create_semi_group_wizard(cur, data):
             (str(size), idx, root_gid)
         )
         size_gid = cur.fetchone()[0]
+
+        # шаг 1: создаём все п/ф размера, запоминаем id по индексу набора
+        set_ids = {}
         for s_idx, item in enumerate(sets):
             pf_name = item.get("name")
             pf_type = item.get("pf_type", "material")
@@ -955,7 +1004,26 @@ def create_semi_group_wizard(cur, data):
                 f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (f"{pf_name} {size}", sku, None, size_gid, pf_type, str(size), product_id)
             )
+            set_ids[s_idx] = cur.fetchone()[0]
             created_count += 1
+
+        # шаг 2: привязываем компоненты для составных п/ф
+        for s_idx, item in enumerate(sets):
+            if item.get("pf_type") != "composite":
+                continue
+            parent_id = set_ids[s_idx]
+            for comp in item.get("components", []):
+                comp_id = None
+                if comp.get("set_index") is not None:
+                    comp_id = set_ids.get(int(comp["set_index"]))
+                elif comp.get("semi_product_id"):
+                    comp_id = int(comp["semi_product_id"])
+                if not comp_id or comp_id == parent_id:
+                    continue
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.semi_product_components (parent_id, component_id, qty) VALUES (%s,%s,%s) ON CONFLICT (parent_id, component_id) DO NOTHING",
+                    (parent_id, comp_id, comp.get("qty", 1))
+                )
     return {"group_id": root_gid, "article": article, "created": created_count}
 
 
@@ -1378,9 +1446,45 @@ def _get_default_semi_product(cur):
     return cur.fetchone()[0]
 
 
+def _assert_composite_available(cur, semi_product_id, qty, warehouse_id):
+    """Для составного п/ф проверяет наличие всех вложенных п/ф на складе."""
+    cur.execute(f"""
+        SELECT spc.component_id, spc.qty, sp.name
+        FROM {SCHEMA}.semi_product_components spc
+        JOIN {SCHEMA}.semi_products sp ON spc.component_id = sp.id
+        WHERE spc.parent_id = %s
+    """, (semi_product_id,))
+    comps = cur.fetchall()
+    if not comps:
+        return
+    missing = []
+    for comp_id, comp_qty, comp_name in comps:
+        need = float(comp_qty or 1) * int(qty or 1)
+        if warehouse_id:
+            cur.execute(
+                f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='semi_product' AND item_id=%s AND warehouse_id=%s",
+                (comp_id, warehouse_id)
+            )
+        else:
+            cur.execute(
+                f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='semi_product' AND item_id=%s",
+                (comp_id,)
+            )
+        avail = float(cur.fetchone()[0] or 0)
+        if avail < need:
+            missing.append(f"«{comp_name}» (нужно {need:g}, есть {avail:g})")
+    if missing:
+        raise WorkerValidationError(
+            "Недостаточно полуфабрикатов для составного изделия: " + ", ".join(missing) +
+            ". Сначала изготовьте недостающие полуфабрикаты."
+        )
+
+
 def _create_single_work_order(cur, order_id, order_item_id, semi_product_id, qty, warehouse_id, overrides=None):
     """Создаёт один заказ-наряд по полуфабрикату + его операции.
     overrides: список {operation_id, material_id, planned_material_norm, labor_cost} для правки спецификации."""
+    # контроль наличия вложенных п/ф для составного
+    _assert_composite_available(cur, semi_product_id, qty, warehouse_id)
     num = "ЗН-" + datetime.now().strftime("%y%m%d%H%M%S%f")[:-3]
     cur.execute(
         f"INSERT INTO {SCHEMA}.work_orders (work_order_number, order_id, order_item_id, semi_product_id, qty, warehouse_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
