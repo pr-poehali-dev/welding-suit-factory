@@ -10,6 +10,7 @@ import {
   StockMaterial,
   PfType,
   PF_TYPE_LABELS,
+  SemiProductComponent,
 } from "@/pages/backoffice/types";
 import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
 import MaterialPicker from "@/components/backoffice/MaterialPicker";
@@ -46,9 +47,12 @@ export default function SemiProductsPage() {
   const [form, setForm] = useState<Partial<SemiProduct>>(EMPTY_SP);
   const [matRows, setMatRows] = useState<Partial<SemiProductMaterial>[]>([]);
   const [opRows, setOpRows] = useState<Partial<SemiProductOperation>[]>([]);
+  const [compRows, setCompRows] = useState<Partial<SemiProductComponent>[]>([]);
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [compPickerOpen, setCompPickerOpen] = useState(false);
+  const [compQuery, setCompQuery] = useState("");
 
   /* --- данные --- */
   const { data: items = [], isLoading } = useQuery<SemiProduct[]>({
@@ -71,6 +75,7 @@ export default function SemiProductsPage() {
         ...data,
         materials: matRows,
         operations: opRows,
+        components: compRows,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bo-semi-products"] });
@@ -124,9 +129,12 @@ export default function SemiProductsPage() {
 
   /* --- helpers --- */
   const openNew = () => {
-    setForm(EMPTY_SP);
+    setForm({ ...EMPTY_SP, group_id: groupFilter && groupFilter > 0 ? groupFilter : null });
     setMatRows([]);
     setOpRows([]);
+    setCompRows([]);
+    setCompPickerOpen(false);
+    setCompQuery("");
     setOpen(true);
   };
 
@@ -138,6 +146,9 @@ export default function SemiProductsPage() {
     });
     setMatRows(sp.materials?.map((m) => ({ ...m })) ?? []);
     setOpRows(sp.operations?.map((o) => ({ ...o })) ?? []);
+    setCompRows(sp.components?.map((c) => ({ ...c })) ?? []);
+    setCompPickerOpen(false);
+    setCompQuery("");
     setOpen(true);
   };
 
@@ -156,6 +167,30 @@ export default function SemiProductsPage() {
   const updateOp = (idx: number, patch: Partial<SemiProductOperation>) =>
     setOpRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   const removeOp = (idx: number) => setOpRows((prev) => prev.filter((_, i) => i !== idx));
+
+  /* --- компоненты (вложенные п/ф) --- */
+  const addComponent = (sp: SemiProduct) => {
+    if (compRows.some((c) => c.component_id === sp.id)) return;
+    setCompRows((prev) => [
+      ...prev,
+      { component_id: sp.id, qty: 1, component_name: sp.name, component_sku: sp.sku, component_type: sp.pf_type },
+    ]);
+    setCompPickerOpen(false);
+    setCompQuery("");
+  };
+  const updateComp = (idx: number, patch: Partial<SemiProductComponent>) =>
+    setCompRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  const removeComp = (idx: number) => setCompRows((prev) => prev.filter((_, i) => i !== idx));
+
+  // кандидаты в компоненты: п/ф из той же группы, кроме самого себя и уже добавленных
+  const componentCandidates = items.filter((sp) => {
+    if (form.id && sp.id === form.id) return false;
+    if (form.group_id && sp.group_id !== form.group_id) return false;
+    if (compRows.some((c) => c.component_id === sp.id)) return false;
+    const q = compQuery.trim().toLowerCase();
+    if (q && !sp.name.toLowerCase().includes(q) && !(sp.sku || "").toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   /* --- группы: подсчёт и фильтрация --- */
   const groupCounts = (() => {
@@ -418,6 +453,88 @@ export default function SemiProductsPage() {
               </div>
             ))}
             {opRows.length === 0 && <p className="text-xs text-slate-400">Операции не добавлены</p>}
+          </div>
+
+          {/* --- Секция: Состав (вложенные полуфабрикаты) --- */}
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700">Состав (полуфабрикаты)</h3>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCompPickerOpen((v) => !v)}
+                disabled={!form.group_id}
+                className="gap-1 text-slate-600 border-slate-300"
+              >
+                <Icon name="Plus" size={14} /> Добавить полуфабрикат
+              </Button>
+            </div>
+            <p className="mb-2 text-xs text-slate-400">
+              {form.group_id
+                ? "Из этой же группы. При изготовлении в заказ-наряде составляющие должны быть в наличии."
+                : "Сначала выберите группу — компоненты берутся из неё."}
+            </p>
+
+            {compPickerOpen && form.group_id && (
+              <div className="mb-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                <input
+                  value={compQuery}
+                  onChange={(e) => setCompQuery(e.target.value)}
+                  placeholder="Поиск полуфабриката в группе..."
+                  className="mb-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-sm outline-none"
+                />
+                <div className="max-h-40 overflow-y-auto">
+                  {componentCandidates.map((sp) => (
+                    <button
+                      key={sp.id}
+                      type="button"
+                      onClick={() => addComponent(sp)}
+                      className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-sm hover:bg-white"
+                    >
+                      <span className="truncate text-slate-700">
+                        {sp.name}
+                        <span className="ml-1 text-xs text-slate-400">
+                          {PF_TYPE_LABELS[(sp.pf_type ?? "material") as PfType]}
+                        </span>
+                      </span>
+                      {sp.sku && <span className="flex-shrink-0 font-mono text-xs text-slate-400">{sp.sku}</span>}
+                    </button>
+                  ))}
+                  {componentCandidates.length === 0 && (
+                    <div className="px-2 py-3 text-center text-xs text-slate-400">
+                      Нет доступных полуфабрикатов в группе
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {compRows.map((row, idx) => (
+              <div key={idx} className="mb-2 flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-500">Полуфабрикат</label>
+                  <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700">
+                    <Icon name="Layers" size={13} className="text-emerald-500" />
+                    <span className="truncate">{row.component_name || `#${row.component_id}`}</span>
+                  </div>
+                </div>
+                <div className="w-28">
+                  <label className="mb-1 block text-xs text-slate-500">Кол-во</label>
+                  <Input
+                    className="h-9 bg-white text-slate-800 border-slate-300"
+                    type="number"
+                    step="0.001"
+                    min={0.001}
+                    value={row.qty ?? 1}
+                    onChange={(e) => updateComp(idx, { qty: Number(e.target.value) })}
+                  />
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => removeComp(idx)}>
+                  <Icon name="X" size={14} className="text-red-500" />
+                </Button>
+              </div>
+            ))}
+            {compRows.length === 0 && <p className="text-xs text-slate-400">Полуфабрикаты не добавлены</p>}
           </div>
 
           <DialogFooter className="mt-4">
