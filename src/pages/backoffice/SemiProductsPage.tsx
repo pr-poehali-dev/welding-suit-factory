@@ -347,6 +347,7 @@ export default function SemiProductsPage() {
                   <option value="material">Материальный</option>
                   <option value="labor">ФОТ (труд)</option>
                   <option value="fittings">Фурнитура</option>
+                  <option value="composite">Составной</option>
                 </select>
               </div>
               <div>
