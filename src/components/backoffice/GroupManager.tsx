@@ -189,13 +189,14 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
   });
 
   const del = useMutation({
-    mutationFn: (id: number) => boFetch("groups", "DELETE", { id }),
+    mutationFn: (id: number) => boFetch("groups", "DELETE", { id, cascade: true }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bo-groups", entityType] });
+      qc.invalidateQueries();
       onSelect(null);
       toast({ title: "Группа удалена" });
     },
-    onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Не удалось удалить", description: e.message, variant: "destructive" }),
   });
 
   const toggleExpand = (id: number) => {
@@ -223,7 +224,13 @@ export default function GroupManager({ entityType, selectedGroupId, onSelect, co
 
   const handleDelete = (g: Group, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Удалить группу «${g.name}»? Записи останутся без группы.`)) {
+    if (
+      confirm(
+        `Удалить группу «${g.name}» со всем содержимым и подгруппами?\n\n` +
+          `Все элементы внутри будут удалены безвозвратно. ` +
+          `Если что-то уже использовалось в документах — удаление будет отменено.`,
+      )
+    ) {
       del.mutate(g.id);
     }
   };

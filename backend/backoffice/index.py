@@ -229,15 +229,100 @@ def update_group(cur, gid, data):
     return dict(zip(cols, row)) if row else None
 
 
-def delete_group(cur, gid):
-    for tbl in ("materials", "fittings", "operations", "clients", "workers", "semi_products", "finished_products"):
-        cur.execute(f"UPDATE {SCHEMA}.{tbl} SET group_id = NULL WHERE group_id = %s", (gid,))
-    cur.execute(f"UPDATE {SCHEMA}.groups SET parent_id = NULL WHERE parent_id = %s", (gid,))
-    cur.execute(f"UPDATE {SCHEMA}.groups SET is_active = false WHERE id=%s RETURNING id", (gid,))
+def _check_item_usage(cur, entity_type, item_id):
+    """Проверяет, используется ли элемент справочника в документах.
+    Возвращает строку-описание, где используется, или None."""
+    if entity_type == "semi_products":
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.work_orders WHERE semi_product_id=%s", (item_id,))
+        if cur.fetchone()[0] > 0:
+            return "используется в заказ-нарядах"
+    elif entity_type == "finished_products":
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.order_items WHERE finished_product_id=%s", (item_id,))
+        if cur.fetchone()[0] > 0:
+            return "используется в заказах"
+    elif entity_type == "materials":
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.work_order_operations WHERE material_id=%s AND status='completed'", (item_id,))
+        if cur.fetchone()[0] > 0:
+            return "использован в выполненных операциях"
+    elif entity_type == "operations":
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.work_order_operations WHERE operation_id=%s AND status='completed'", (item_id,))
+        if cur.fetchone()[0] > 0:
+            return "использована в выполненных операциях"
+    elif entity_type == "clients":
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.orders WHERE client_id=%s", (item_id,))
+        if cur.fetchone()[0] > 0:
+            return "используется в заказах"
+    return None
+
+
+def _delete_group_item(cur, entity_type, item_id):
+    """Удаляет один элемент справочника вместе со связями."""
+    if entity_type == "semi_products":
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (item_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (item_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE semi_product_id=%s", (item_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_products WHERE id=%s", (item_id,))
+    elif entity_type == "finished_products":
+        cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE finished_product_id=%s", (item_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.finished_product_fittings WHERE finished_product_id=%s", (item_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.finished_products WHERE id=%s", (item_id,))
+    else:
+        cur.execute(f"DELETE FROM {SCHEMA}.{entity_type} WHERE id=%s", (item_id,))
+
+
+def delete_group(cur, gid, cascade=False):
+    """Удаляет группу. При cascade=True удаляет всё содержимое и подгруппы.
+    Если хоть один элемент используется в документах — операция блокируется."""
+    group_ids = get_group_descendants(cur, gid)
+    if not group_ids:
+        return None
+
+    # определяем тип сущности группы
+    cur.execute(f"SELECT entity_type FROM {SCHEMA}.groups WHERE id=%s", (gid,))
     row = cur.fetchone()
     if not row:
         return None
-    return {"deleted": gid}
+    entity_type = row[0]
+
+    item_tables = {
+        "materials": "materials", "fittings": "fittings", "operations": "operations",
+        "clients": "clients", "workers": "workers", "semi_products": "semi_products",
+        "finished_products": "finished_products",
+    }
+    tbl = item_tables.get(entity_type)
+
+    if not cascade:
+        # старое поведение — отвязываем элементы, деактивируем группы
+        for t in item_tables.values():
+            cur.execute(f"UPDATE {SCHEMA}.{t} SET group_id = NULL WHERE group_id = ANY(%s)", (group_ids,))
+        cur.execute(f"UPDATE {SCHEMA}.groups SET is_active = false WHERE id = ANY(%s)", (group_ids,))
+        return {"deleted": gid, "mode": "detach"}
+
+    # каскад: сначала проверяем, что ничего не используется
+    if tbl:
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.{tbl} WHERE group_id = ANY(%s)", (group_ids,))
+        items = cur.fetchall()
+        blocked = []
+        for item_id, item_name in items:
+            usage = _check_item_usage(cur, entity_type, item_id)
+            if usage:
+                blocked.append({"id": item_id, "name": item_name, "reason": usage})
+        if blocked:
+            names = ", ".join(f"«{b['name']}» ({b['reason']})" for b in blocked[:5])
+            more = f" и ещё {len(blocked) - 5}" if len(blocked) > 5 else ""
+            raise WorkerValidationError(
+                f"Нельзя удалить группу: {len(blocked)} элемент(ов) уже использованы: {names}{more}. "
+                f"Сначала измените связанные документы."
+            )
+        # удаляем все элементы
+        for item_id, _ in items:
+            _delete_group_item(cur, entity_type, item_id)
+
+    # удаляем сами группы (от листьев к корню)
+    for g in reversed(group_ids):
+        cur.execute(f"DELETE FROM {SCHEMA}.groups WHERE id=%s", (g,))
+
+    return {"deleted": gid, "mode": "cascade", "groups_removed": len(group_ids)}
 
 
 def get_group_descendants(cur, group_id):
@@ -928,6 +1013,9 @@ def sync_catalog_to_finished(cur):
 
 def delete_finished_product(cur, fpid):
     """Удаление готовой продукции по id"""
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.order_items WHERE finished_product_id=%s", (fpid,))
+    if cur.fetchone()[0] > 0:
+        raise WorkerValidationError("Нельзя удалить: продукция используется в заказах. Сначала измените заказ.")
     cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE finished_product_id=%s", (fpid,))
     cur.execute(f"DELETE FROM {SCHEMA}.finished_product_fittings WHERE finished_product_id=%s", (fpid,))
     cur.execute(f"DELETE FROM {SCHEMA}.finished_products WHERE id=%s RETURNING id", (fpid,))
@@ -1630,12 +1718,19 @@ def handler(event, context):
             item_id = int(qs.get("id", 0) or data.get("id", 0))
             if not item_id:
                 return err("id required")
+            cascade = str(qs.get("cascade", "") or data.get("cascade", "")).lower() in ("1", "true", "yes")
             if entity == "groups":
-                result = delete_group(cur, item_id)
+                result = delete_group(cur, item_id, cascade=cascade)
             elif entity == "finished_products":
                 result = delete_finished_product(cur, item_id)
             elif entity == "semi_products":
                 result = delete_semi_product(cur, item_id)
+            elif entity in ("materials", "fittings", "operations", "clients"):
+                usage = _check_item_usage(cur, entity, item_id)
+                if usage:
+                    raise WorkerValidationError(f"Нельзя удалить: элемент {usage}. Сначала измените связанный документ.")
+                _delete_group_item(cur, entity, item_id)
+                result = {"deleted": item_id}
             elif entity == "workers":
                 cur.execute(f"DELETE FROM {SCHEMA}.worker_permissions WHERE worker_id=%s", (item_id,))
                 cur.execute(f"DELETE FROM {SCHEMA}.auth_sessions WHERE worker_id=%s", (item_id,))
