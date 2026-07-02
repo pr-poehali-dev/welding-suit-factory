@@ -7,8 +7,6 @@ import {
   Client,
   FinishedProduct,
   Warehouse,
-  Material,
-  Operation,
   ORDER_STATUSES,
 } from "@/pages/backoffice/types";
 import Icon from "@/components/ui/icon";
@@ -75,14 +73,6 @@ export default function OrdersPage() {
   const { data: warehouses = [] } = useQuery<Warehouse[]>({
     queryKey: ["bo-warehouses"],
     queryFn: () => boFetch("warehouses"),
-  });
-  const { data: materials = [] } = useQuery<Material[]>({
-    queryKey: ["bo-materials"],
-    queryFn: () => boFetch("materials"),
-  });
-  const { data: operations = [] } = useQuery<Operation[]>({
-    queryKey: ["bo-operations"],
-    queryFn: () => boFetch("operations"),
   });
 
   /* --- мутации --- */
@@ -158,24 +148,10 @@ export default function OrdersPage() {
   const [woDialogOpen, setWoDialogOpen] = useState(false);
   const [woItem, setWoItem] = useState<OrderItem | null>(null);
   const [woWarehouse, setWoWarehouse] = useState<number>(0);
-  const [woMaterialId, setWoMaterialId] = useState<number | null>(null);
-  const [woNorm, setWoNorm] = useState<number>(0);
-  const [woMatQuery, setWoMatQuery] = useState("");
-
-  const woOpsWithNorm = operations.filter((o) => o.has_material_norm && o.is_active);
-  const woMaterialsFiltered = materials.filter((m) => {
-    if (!m.is_active) return false;
-    const q = woMatQuery.trim().toLowerCase();
-    if (!q) return true;
-    return m.name.toLowerCase().includes(q) || (m.sku || "").toLowerCase().includes(q);
-  });
 
   const openWoDialog = (item: OrderItem) => {
     setWoItem(item);
     setWoWarehouse(warehouses[0]?.id ?? 0);
-    setWoMaterialId(null);
-    setWoNorm(0);
-    setWoMatQuery("");
     setWoDialogOpen(true);
   };
 
@@ -460,7 +436,7 @@ export default function OrdersPage() {
           </DialogHeader>
           <div className="grid gap-3">
             <p className="text-sm text-slate-600">
-              Позиция: <strong>{woItem?.product_name || `#${woItem?.finished_product_id}`}</strong>,
+              Изделие: <strong>{woItem?.product_name || `#${woItem?.finished_product_id}`}</strong>,
               Кол-во: <strong>{woItem?.qty}</strong>
             </p>
             <div>
@@ -476,47 +452,10 @@ export default function OrdersPage() {
               </select>
             </div>
 
-            {woOpsWithNorm.length > 0 && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="mb-2 text-sm font-medium text-slate-600">
-                  Спецификация (материал)
-                </div>
-                <p className="mb-2 text-xs text-slate-400">
-                  Необязательно. Задайте материал и норму для операций с расходом.
-                </p>
-                <input
-                  value={woMatQuery}
-                  onChange={(e) => setWoMatQuery(e.target.value)}
-                  placeholder="Поиск по названию или артикулу..."
-                  className="mb-2 h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800"
-                />
-                <select
-                  className="mb-2 h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800"
-                  value={woMaterialId ?? 0}
-                  onChange={(e) => setWoMaterialId(Number(e.target.value) || null)}
-                >
-                  <option value={0}>-- не выбирать --</option>
-                  {woMaterialsFiltered.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}{m.sku ? ` (${m.sku})` : ""}
-                    </option>
-                  ))}
-                </select>
-                {woMaterialId && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-slate-500">Норма на 1 шт:</label>
-                    <Input
-                      type="number"
-                      step="0.001"
-                      min={0}
-                      value={woNorm}
-                      onChange={(e) => setWoNorm(Number(e.target.value))}
-                      className="h-9 w-28 border-slate-300 bg-white text-slate-800"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-slate-600">
+              <Icon name="Info" size={16} className="mt-0.5 flex-shrink-0 text-blue-500" />
+              <span>Система автоматически разложит изделие на полуфабрикаты и операции по его спецификации — вручную ничего указывать не нужно.</span>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setWoDialogOpen(false)} className="text-slate-600 border-slate-300">Отмена</Button>
@@ -530,13 +469,6 @@ export default function OrdersPage() {
                   finished_product_id: woItem.finished_product_id,
                   qty: woItem.qty,
                   warehouse_id: woWarehouse,
-                  operations: woMaterialId
-                    ? woOpsWithNorm.map((op) => ({
-                        operation_id: op.id,
-                        material_id: woMaterialId,
-                        planned_material_norm: (woNorm || 0) * (woItem.qty ?? 1),
-                      }))
-                    : undefined,
                 });
                 setWoDialogOpen(false);
               }}

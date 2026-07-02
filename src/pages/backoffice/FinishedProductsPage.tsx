@@ -10,6 +10,7 @@ import {
   Group,
 } from "@/pages/backoffice/types";
 import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
+import SemiProductEditorDialog from "@/components/backoffice/SemiProductEditorDialog";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,8 @@ export default function FinishedProductsPage() {
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+  const [spEditorOpen, setSpEditorOpen] = useState(false);
+  const [spEditorId, setSpEditorId] = useState<number | null>(null);
 
   const { data: items = [], isLoading } = useQuery<FinishedProduct[]>({
     queryKey: ["bo-finished-products"],
@@ -122,6 +125,25 @@ export default function FinishedProductsPage() {
   const updateSemi = (idx: number, patch: Partial<FinishedProductSemi>) =>
     setSemiRows((p) => p.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   const removeSemi = (idx: number) => setSemiRows((p) => p.filter((_, i) => i !== idx));
+
+  const openSpCreate = () => {
+    setSpEditorId(null);
+    setSpEditorOpen(true);
+  };
+  const openSpEdit = (semiProductId: number) => {
+    setSpEditorId(semiProductId);
+    setSpEditorOpen(true);
+  };
+  const handleSpSaved = (sp: SemiProduct) => {
+    qc.invalidateQueries({ queryKey: ["bo-semi-products"] });
+    if (spEditorId === null) {
+      setSemiRows((prev) => [...prev, { semi_product_id: sp.id, qty: 1, semi_product_name: sp.name }]);
+    } else {
+      setSemiRows((prev) =>
+        prev.map((r) => (r.semi_product_id === sp.id ? { ...r, semi_product_name: sp.name } : r)),
+      );
+    }
+  };
 
   const updateFit = (idx: number, patch: Partial<FinishedProductFitting>) =>
     setFitRows((p) => p.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -416,15 +438,25 @@ export default function FinishedProductsPage() {
 
           <div className="mt-4 border-t border-slate-200 pt-4">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700">Полуфабрикаты</h3>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setSemiRows([...semiRows, { semi_product_id: 0, qty: 1 }])}
-                className="gap-1 text-slate-600 border-slate-300"
-              >
-                <Icon name="Plus" size={14} /> Добавить
-              </Button>
+              <h3 className="text-sm font-semibold text-slate-700">Спецификации</h3>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={openSpCreate}
+                  className="gap-1 text-slate-600 border-slate-300"
+                >
+                  <Icon name="Plus" size={14} /> Создать спецификацию
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSemiRows([...semiRows, { semi_product_id: 0, qty: 1 }])}
+                  className="gap-1 text-slate-600 border-slate-300"
+                >
+                  <Icon name="Plus" size={14} /> Добавить
+                </Button>
+              </div>
             </div>
             {semiRows.map((row, idx) => (
               <div key={idx} className="mb-2 flex items-end gap-2">
@@ -451,12 +483,21 @@ export default function FinishedProductsPage() {
                     onChange={(e) => updateSemi(idx, { qty: Number(e.target.value) })}
                   />
                 </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="Редактировать спецификацию"
+                  disabled={!row.semi_product_id}
+                  onClick={() => row.semi_product_id && openSpEdit(row.semi_product_id)}
+                >
+                  <Icon name="Pencil" size={14} className="text-slate-500" />
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => removeSemi(idx)}>
                   <Icon name="X" size={14} className="text-red-500" />
                 </Button>
               </div>
             ))}
-            {semiRows.length === 0 && <p className="text-xs text-slate-400">Нет полуфабрикатов</p>}
+            {semiRows.length === 0 && <p className="text-xs text-slate-400">Нет спецификаций</p>}
           </div>
 
           <div className="mt-4 border-t border-slate-200 pt-4">
@@ -518,6 +559,13 @@ export default function FinishedProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SemiProductEditorDialog
+        open={spEditorOpen}
+        onOpenChange={setSpEditorOpen}
+        semiProductId={spEditorId}
+        onSaved={handleSpSaved}
+      />
     </div>
   );
 }

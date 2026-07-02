@@ -33,12 +33,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Фурнитура", icon: "Package", path: "/backoffice/fittings", module: "fittings" },
       { label: "Операции", icon: "Settings", path: "/backoffice/operations", module: "operations" },
       {
-        label: "Полуфабрикаты",
-        icon: "Layers",
-        path: "/backoffice/semi-products",
-        module: "semi_products",
-      },
-      {
         label: "Готовая продукция",
         icon: "Box",
         path: "/backoffice/finished-products",
