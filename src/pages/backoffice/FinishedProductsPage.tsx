@@ -3,14 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   boFetch,
   FinishedProduct,
-  FinishedProductSemi,
   FinishedProductFitting,
-  SemiProduct,
   Fitting,
   Group,
 } from "@/pages/backoffice/types";
 import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
-import SemiProductEditorDialog from "@/components/backoffice/SemiProductEditorDialog";
+import SpecificationsDialog from "@/components/backoffice/SpecificationsDialog";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +24,7 @@ import {
 
 const EMPTY: Partial<FinishedProduct> = {
   name: "", sku: "", description: "", base_price: 0, is_active: true,
-  semi_products: [], fittings: [], group_id: null,
+  fittings: [], group_id: null,
 };
 
 interface ModelGroup {
@@ -41,22 +39,16 @@ export default function FinishedProductsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<FinishedProduct>>(EMPTY);
-  const [semiRows, setSemiRows] = useState<Partial<FinishedProductSemi>[]>([]);
   const [fitRows, setFitRows] = useState<Partial<FinishedProductFitting>[]>([]);
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
-  const [spEditorOpen, setSpEditorOpen] = useState(false);
-  const [spEditorId, setSpEditorId] = useState<number | null>(null);
+  const [specsDialogOpen, setSpecsDialogOpen] = useState(false);
 
   const { data: items = [], isLoading } = useQuery<FinishedProduct[]>({
     queryKey: ["bo-finished-products"],
     queryFn: () => boFetch("finished_products"),
-  });
-  const { data: semiProducts = [] } = useQuery<SemiProduct[]>({
-    queryKey: ["bo-semi-products"],
-    queryFn: () => boFetch("semi_products"),
   });
   const { data: fittings = [] } = useQuery<Fitting[]>({
     queryKey: ["bo-fittings"],
@@ -71,7 +63,6 @@ export default function FinishedProductsPage() {
     mutationFn: (data: Partial<FinishedProduct>) =>
       boFetch("finished_products", data.id ? "PUT" : "POST", {
         ...data,
-        semi_products: semiRows,
         fittings: fitRows,
       }),
     onSuccess: () => {
@@ -107,7 +98,6 @@ export default function FinishedProductsPage() {
 
   const openNew = () => {
     setForm(EMPTY);
-    setSemiRows([]);
     setFitRows([]);
     setOpen(true);
   };
@@ -117,32 +107,8 @@ export default function FinishedProductsPage() {
       id: fp.id, name: fp.name, sku: fp.sku, description: fp.description,
       base_price: fp.base_price, is_active: fp.is_active, group_id: fp.group_id,
     });
-    setSemiRows(fp.semi_products?.map((s) => ({ ...s })) ?? []);
     setFitRows(fp.fittings?.map((f) => ({ ...f })) ?? []);
     setOpen(true);
-  };
-
-  const updateSemi = (idx: number, patch: Partial<FinishedProductSemi>) =>
-    setSemiRows((p) => p.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
-  const removeSemi = (idx: number) => setSemiRows((p) => p.filter((_, i) => i !== idx));
-
-  const openSpCreate = () => {
-    setSpEditorId(null);
-    setSpEditorOpen(true);
-  };
-  const openSpEdit = (semiProductId: number) => {
-    setSpEditorId(semiProductId);
-    setSpEditorOpen(true);
-  };
-  const handleSpSaved = (sp: SemiProduct) => {
-    qc.invalidateQueries({ queryKey: ["bo-semi-products"] });
-    if (spEditorId === null) {
-      setSemiRows((prev) => [...prev, { semi_product_id: sp.id, qty: 1, semi_product_name: sp.name }]);
-    } else {
-      setSemiRows((prev) =>
-        prev.map((r) => (r.semi_product_id === sp.id ? { ...r, semi_product_name: sp.name } : r)),
-      );
-    }
   };
 
   const updateFit = (idx: number, patch: Partial<FinishedProductFitting>) =>
@@ -439,65 +405,21 @@ export default function FinishedProductsPage() {
           <div className="mt-4 border-t border-slate-200 pt-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">Спецификации</h3>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={openSpCreate}
-                  className="gap-1 text-slate-600 border-slate-300"
-                >
-                  <Icon name="Plus" size={14} /> Создать спецификацию
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setSemiRows([...semiRows, { semi_product_id: 0, qty: 1 }])}
-                  className="gap-1 text-slate-600 border-slate-300"
-                >
-                  <Icon name="Plus" size={14} /> Добавить
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!form.id}
+                onClick={() => setSpecsDialogOpen(true)}
+                className="gap-1 text-slate-600 border-slate-300"
+              >
+                <Icon name="Layers" size={14} /> Спецификации
+              </Button>
             </div>
-            {semiRows.map((row, idx) => (
-              <div key={idx} className="mb-2 flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-slate-500">Полуфабрикат</label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800"
-                    value={row.semi_product_id ?? 0}
-                    onChange={(e) => updateSemi(idx, { semi_product_id: Number(e.target.value) })}
-                  >
-                    <option value={0}>-- выберите --</option>
-                    {semiProducts.filter((s) => s.is_active).map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-24">
-                  <label className="mb-1 block text-xs text-slate-500">Кол-во</label>
-                  <Input
-                    className="h-9 bg-white text-slate-800 border-slate-300"
-                    type="number"
-                    min={1}
-                    value={row.qty ?? 1}
-                    onChange={(e) => updateSemi(idx, { qty: Number(e.target.value) })}
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  title="Редактировать спецификацию"
-                  disabled={!row.semi_product_id}
-                  onClick={() => row.semi_product_id && openSpEdit(row.semi_product_id)}
-                >
-                  <Icon name="Pencil" size={14} className="text-slate-500" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => removeSemi(idx)}>
-                  <Icon name="X" size={14} className="text-red-500" />
-                </Button>
-              </div>
-            ))}
-            {semiRows.length === 0 && <p className="text-xs text-slate-400">Нет спецификаций</p>}
+            {!form.id && (
+              <p className="text-xs text-slate-400">
+                Сохраните изделие, чтобы добавить спецификации
+              </p>
+            )}
           </div>
 
           <div className="mt-4 border-t border-slate-200 pt-4">
@@ -560,11 +482,11 @@ export default function FinishedProductsPage() {
         </DialogContent>
       </Dialog>
 
-      <SemiProductEditorDialog
-        open={spEditorOpen}
-        onOpenChange={setSpEditorOpen}
-        semiProductId={spEditorId}
-        onSaved={handleSpSaved}
+      <SpecificationsDialog
+        open={specsDialogOpen}
+        onOpenChange={setSpecsDialogOpen}
+        finishedProductId={form.id ?? null}
+        productName={form.name}
       />
     </div>
   );

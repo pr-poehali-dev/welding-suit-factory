@@ -7,7 +7,6 @@ import {
   SemiProductOperation,
   SemiProductComponent,
   Operation,
-  Group,
   StockMaterial,
   PfType,
   PF_TYPE_LABELS,
@@ -27,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 
 const EMPTY_SP: Partial<SemiProduct> = {
-  name: "", sku: "", description: "", is_active: true, pf_type: "material", materials: [], operations: [], group_id: null,
+  name: "", sku: "", description: "", is_active: true, pf_type: "material", materials: [], operations: [],
 };
 const EMPTY_OP: Partial<SemiProductOperation> = { operation_id: 0, labor_cost: 0, sort_order: 0, notes: "" };
 
@@ -36,6 +35,7 @@ interface SemiProductEditorDialogProps {
   onOpenChange: (v: boolean) => void;
   semiProductId?: number | null;
   defaultName?: string;
+  specificationId?: number;
   onSaved: (sp: SemiProduct) => void;
 }
 
@@ -44,6 +44,7 @@ export default function SemiProductEditorDialog({
   onOpenChange,
   semiProductId,
   defaultName,
+  specificationId,
   onSaved,
 }: SemiProductEditorDialogProps) {
   const qc = useQueryClient();
@@ -63,10 +64,6 @@ export default function SemiProductEditorDialog({
     queryKey: ["bo-operations"],
     queryFn: () => boFetch("operations"),
   });
-  const { data: groups = [] } = useQuery<Group[]>({
-    queryKey: ["bo-groups", "semi_products"],
-    queryFn: () => boFetch("groups", "GET", undefined, { entity_type: "semi_products" }),
-  });
 
   useEffect(() => {
     if (!open) return;
@@ -78,7 +75,7 @@ export default function SemiProductEditorDialog({
       if (sp) {
         setForm({
           id: sp.id, name: sp.name, sku: sp.sku, description: sp.description,
-          is_active: sp.is_active, group_id: sp.group_id ?? null,
+          is_active: sp.is_active,
           pf_type: sp.pf_type ?? "material", size_label: sp.size_label,
         });
         setMatRows(sp.materials?.map((m) => ({ ...m })) ?? []);
@@ -97,6 +94,8 @@ export default function SemiProductEditorDialog({
     mutationFn: (data: Partial<SemiProduct>): Promise<SemiProduct> =>
       boFetch("semi_products", data.id ? "PUT" : "POST", {
         ...data,
+        group_id: null,
+        ...(data.id ? {} : { specification_id: specificationId ?? null }),
         materials: matRows,
         operations: opRows,
         components: compRows,
@@ -140,7 +139,7 @@ export default function SemiProductEditorDialog({
 
   const componentCandidates = items.filter((sp) => {
     if (form.id && sp.id === form.id) return false;
-    if (form.group_id && sp.group_id !== form.group_id) return false;
+    if (specificationId != null && sp.specification_id !== specificationId) return false;
     if (compRows.some((c) => c.component_id === sp.id)) return false;
     const q = compQuery.trim().toLowerCase();
     if (q && !sp.name.toLowerCase().includes(q) && !(sp.sku || "").toLowerCase().includes(q)) return false;
@@ -170,33 +169,18 @@ export default function SemiProductEditorDialog({
               <label className="mb-1 block text-sm font-medium text-slate-600">Описание</label>
               <Textarea className="bg-white text-slate-800 border-slate-300" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">Тип полуфабриката</label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
-                  value={form.pf_type ?? "material"}
-                  onChange={(e) => setForm({ ...form, pf_type: e.target.value as PfType })}
-                >
-                  <option value="material">Материальный</option>
-                  <option value="labor">ФОТ (труд)</option>
-                  <option value="fittings">Фурнитура</option>
-                  <option value="composite">Составной</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">Группа</label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
-                  value={form.group_id ?? ""}
-                  onChange={(e) => setForm({ ...form, group_id: e.target.value ? Number(e.target.value) : null })}
-                >
-                  <option value="">— без группы —</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Тип полуфабриката</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                value={form.pf_type ?? "material"}
+                onChange={(e) => setForm({ ...form, pf_type: e.target.value as PfType })}
+              >
+                <option value="material">Материальный</option>
+                <option value="labor">ФОТ (труд)</option>
+                <option value="fittings">Фурнитура</option>
+                <option value="composite">Составной</option>
+              </select>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
@@ -295,24 +279,23 @@ export default function SemiProductEditorDialog({
                 size="sm"
                 variant="outline"
                 onClick={() => setCompPickerOpen((v) => !v)}
-                disabled={!form.group_id}
                 className="gap-1 text-slate-600 border-slate-300"
               >
                 <Icon name="Plus" size={14} /> Добавить полуфабрикат
               </Button>
             </div>
             <p className="mb-2 text-xs text-slate-400">
-              {form.group_id
-                ? "Из этой же группы. При изготовлении в заказ-наряде составляющие должны быть в наличии."
-                : "Сначала выберите группу — компоненты берутся из неё."}
+              {specificationId != null
+                ? "Из этой же спецификации. При изготовлении в заказ-наряде составляющие должны быть в наличии."
+                : "При изготовлении в заказ-наряде составляющие должны быть в наличии."}
             </p>
 
-            {compPickerOpen && form.group_id && (
+            {compPickerOpen && (
               <div className="mb-2 rounded-md border border-slate-200 bg-slate-50 p-2">
                 <input
                   value={compQuery}
                   onChange={(e) => setCompQuery(e.target.value)}
-                  placeholder="Поиск полуфабриката в группе..."
+                  placeholder="Поиск полуфабриката..."
                   className="mb-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-sm outline-none"
                 />
                 <div className="max-h-40 overflow-y-auto">
@@ -334,7 +317,7 @@ export default function SemiProductEditorDialog({
                   ))}
                   {componentCandidates.length === 0 && (
                     <div className="px-2 py-3 text-center text-xs text-slate-400">
-                      Нет доступных полуфабрикатов в группе
+                      Нет доступных полуфабрикатов
                     </div>
                   )}
                 </div>

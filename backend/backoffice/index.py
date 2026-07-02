@@ -118,6 +118,9 @@ ENTITY_MODULE = {
     "finished_products": "finished_products",
     "sync_catalog": "finished_products",
     "catalog_products": "finished_products",
+    "specifications": "finished_products",
+    "specification_activate": "finished_products",
+    "copy_semi_to_spec": "finished_products",
     "units": "units",
     "warehouses": "stock",
     "stock": "stock",
@@ -1148,9 +1151,10 @@ def list_semi_products(cur):
 
 def create_semi_product(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id, specification_id, spec_qty) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
         (data["name"], data.get("sku"), data.get("description"), data.get("group_id"),
-         data.get("pf_type", "material"), data.get("size_label"), data.get("product_id"))
+         data.get("pf_type", "material"), data.get("size_label"), data.get("product_id"),
+         data.get("specification_id"), data.get("spec_qty", 1))
     )
     cols = [d[0] for d in cur.description]
     sp = dict(zip(cols, cur.fetchone()))
@@ -1175,9 +1179,9 @@ def create_semi_product(cur, data):
 
 def update_semi_product(cur, spid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.semi_products SET name=%s, sku=%s, description=%s, is_active=%s, group_id=%s, pf_type=COALESCE(%s, pf_type), size_label=%s, updated_at=now() WHERE id=%s RETURNING *",
+        f"UPDATE {SCHEMA}.semi_products SET name=%s, sku=%s, description=%s, is_active=%s, group_id=%s, pf_type=COALESCE(%s, pf_type), size_label=%s, spec_qty=COALESCE(%s, spec_qty), updated_at=now() WHERE id=%s RETURNING *",
         (data["name"], data.get("sku"), data.get("description"), data.get("is_active", True),
-         data.get("group_id"), data.get("pf_type"), data.get("size_label"), spid)
+         data.get("group_id"), data.get("pf_type"), data.get("size_label"), data.get("spec_qty"), spid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
@@ -1277,7 +1281,7 @@ def _clone_semi_product(cur, spid, overrides=None):
         return None
     src = dict(zip(cols, src))
     cur.execute(
-        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id, is_active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        f"INSERT INTO {SCHEMA}.semi_products (name, sku, description, group_id, pf_type, size_label, product_id, specification_id, spec_qty, is_active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
         (
             overrides.get("name", src["name"] + " (копия)"),
             overrides.get("sku", src.get("sku")),
@@ -1286,6 +1290,8 @@ def _clone_semi_product(cur, spid, overrides=None):
             src.get("pf_type", "material"),
             overrides.get("size_label", src.get("size_label")),
             src.get("product_id"),
+            overrides.get("specification_id", src.get("specification_id")),
+            overrides.get("spec_qty", src.get("spec_qty", 1)),
             True,
         )
     )
@@ -1316,6 +1322,118 @@ def clone_semi_product(cur, data):
             "group_id": data.get("group_id"),
         }.items() if v is not None
     })
+
+
+# ========== СПЕЦИФИКАЦИИ (варианты состава изделия) ==========
+def list_specifications(cur, finished_product_id):
+    """Список спецификаций изделия с их полуфабрикатами."""
+    if not finished_product_id:
+        raise WorkerValidationError("Не указано изделие")
+    cur.execute(
+        f"SELECT * FROM {SCHEMA}.specifications WHERE finished_product_id=%s ORDER BY is_active DESC, id",
+        (int(finished_product_id),),
+    )
+    cols = [d[0] for d in cur.description]
+    specs = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for sp in specs:
+        cur.execute(f"""
+            SELECT s.* FROM {SCHEMA}.semi_products s
+            WHERE s.specification_id=%s ORDER BY s.name
+        """, (sp["id"],))
+        sc = [d[0] for d in cur.description]
+        items = [dict(zip(sc, r)) for r in cur.fetchall()]
+        for it in items:
+            _load_sp_details(cur, it)
+        sp["semi_products"] = items
+    return specs
+
+
+def create_specification(cur, data):
+    fp_id = data.get("finished_product_id")
+    if not fp_id:
+        raise WorkerValidationError("Не указано изделие")
+    name = (data.get("name") or "").strip() or "Новая спецификация"
+    # первая спецификация изделия — активна автоматически
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.specifications WHERE finished_product_id=%s", (fp_id,))
+    is_first = cur.fetchone()[0] == 0
+    make_active = bool(data.get("is_active")) or is_first
+    if make_active:
+        cur.execute(f"UPDATE {SCHEMA}.specifications SET is_active=false WHERE finished_product_id=%s", (fp_id,))
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.specifications (finished_product_id, name, is_active) VALUES (%s,%s,%s) RETURNING *",
+        (fp_id, name, make_active),
+    )
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, cur.fetchone()))
+
+
+def update_specification(cur, spec_id, data):
+    cur.execute(
+        f"UPDATE {SCHEMA}.specifications SET name=%s WHERE id=%s RETURNING *",
+        ((data.get("name") or "").strip() or "Спецификация", spec_id),
+    )
+    cols = [d[0] for d in cur.description]
+    row = cur.fetchone()
+    return dict(zip(cols, row)) if row else None
+
+
+def set_active_specification(cur, spec_id):
+    cur.execute(f"SELECT finished_product_id FROM {SCHEMA}.specifications WHERE id=%s", (spec_id,))
+    r = cur.fetchone()
+    if not r:
+        raise WorkerValidationError("Спецификация не найдена")
+    fp_id = r[0]
+    cur.execute(f"UPDATE {SCHEMA}.specifications SET is_active=false WHERE finished_product_id=%s", (fp_id,))
+    cur.execute(f"UPDATE {SCHEMA}.specifications SET is_active=true WHERE id=%s", (spec_id,))
+    return {"ok": True, "active_id": spec_id}
+
+
+def delete_specification(cur, spec_id):
+    cur.execute(f"SELECT finished_product_id, is_active FROM {SCHEMA}.specifications WHERE id=%s", (spec_id,))
+    r = cur.fetchone()
+    if not r:
+        return None
+    fp_id, was_active = r
+    # запрет удаления, если ПФ спецификации используются в заказ-нарядах
+    cur.execute(f"""
+        SELECT COUNT(*) FROM {SCHEMA}.work_orders wo
+        JOIN {SCHEMA}.semi_products s ON wo.semi_product_id = s.id
+        WHERE s.specification_id=%s
+    """, (spec_id,))
+    if cur.fetchone()[0] > 0:
+        raise WorkerValidationError("Нельзя удалить: полуфабрикаты спецификации используются в заказ-нарядах")
+    # удаляем ПФ спецификации со всем составом
+    cur.execute(f"SELECT id FROM {SCHEMA}.semi_products WHERE specification_id=%s", (spec_id,))
+    sp_ids = [row[0] for row in cur.fetchall()]
+    for sp_id in sp_ids:
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_product_components WHERE parent_id=%s OR component_id=%s", (sp_id, sp_id))
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (sp_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (sp_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.finished_product_semi WHERE semi_product_id=%s", (sp_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.semi_products WHERE id=%s", (sp_id,))
+    cur.execute(f"DELETE FROM {SCHEMA}.specifications WHERE id=%s RETURNING id", (spec_id,))
+    deleted = cur.fetchone()
+    # если удалили активную — сделать активной другую
+    if was_active:
+        cur.execute(f"SELECT id FROM {SCHEMA}.specifications WHERE finished_product_id=%s ORDER BY id LIMIT 1", (fp_id,))
+        nxt = cur.fetchone()
+        if nxt:
+            cur.execute(f"UPDATE {SCHEMA}.specifications SET is_active=true WHERE id=%s", (nxt[0],))
+    return {"deleted": spec_id} if deleted else None
+
+
+def copy_semi_to_spec(cur, data):
+    """Копирует полуфабрикат в другую спецификацию (копия принадлежит целевой)."""
+    sp_id = data.get("id")
+    target_spec = data.get("specification_id")
+    if not sp_id or not target_spec:
+        raise WorkerValidationError("Не указан полуфабрикат или спецификация")
+    overrides = {"specification_id": target_spec}
+    if data.get("name"):
+        overrides["name"] = data["name"]
+    if data.get("spec_qty") is not None:
+        overrides["spec_qty"] = data["spec_qty"]
+    return _clone_semi_product(cur, sp_id, overrides)
 
 
 def clone_semi_group(cur, data):
@@ -2058,11 +2176,21 @@ def create_work_order(cur, data):
         r = cur.fetchone()
         fp_id = r[0] if r else None
 
-    # берём полуфабрикаты из состава изделия
+    # берём полуфабрикаты из активной спецификации изделия
     semi_ids = []
     if not explicit_sp and fp_id:
-        cur.execute(f"SELECT semi_product_id, qty FROM {SCHEMA}.finished_product_semi WHERE finished_product_id=%s", (fp_id,))
+        cur.execute(f"""
+            SELECT s.id, COALESCE(s.spec_qty, 1)
+            FROM {SCHEMA}.semi_products s
+            JOIN {SCHEMA}.specifications spec ON s.specification_id = spec.id
+            WHERE spec.finished_product_id=%s AND spec.is_active=true
+            ORDER BY s.name
+        """, (fp_id,))
         semi_ids = [(row[0], float(row[1] or 1)) for row in cur.fetchall()]
+        # fallback на старую связь, если спецификаций ещё нет
+        if not semi_ids:
+            cur.execute(f"SELECT semi_product_id, qty FROM {SCHEMA}.finished_product_semi WHERE finished_product_id=%s", (fp_id,))
+            semi_ids = [(row[0], float(row[1] or 1)) for row in cur.fetchall()]
 
     created = []
     if explicit_sp:
@@ -2341,6 +2469,8 @@ def handler(event, context):
                 return ok(list_semi_products(cur))
             elif entity == "finished_products":
                 return ok(list_finished_products(cur))
+            elif entity == "specifications":
+                return ok(list_specifications(cur, qs.get("finished_product_id")))
             elif entity == "catalog_products":
                 return ok(list_catalog_products(cur))
             elif entity == "catalog_sizes" and qs.get("product_id"):
@@ -2416,6 +2546,12 @@ def handler(event, context):
                 result = clone_semi_group(cur, data)
             elif entity == "finished_products":
                 result = create_finished_product(cur, data)
+            elif entity == "specifications":
+                result = create_specification(cur, data)
+            elif entity == "specification_activate":
+                result = set_active_specification(cur, int(data["id"]))
+            elif entity == "copy_semi_to_spec":
+                result = copy_semi_to_spec(cur, data)
             elif entity == "sync_catalog":
                 result = sync_catalog_to_finished(cur)
             elif entity == "stock_movement":
@@ -2463,6 +2599,8 @@ def handler(event, context):
                 result = update_semi_product(cur, item_id, data)
             elif entity == "finished_products":
                 result = update_finished_product(cur, item_id, data)
+            elif entity == "specifications":
+                result = update_specification(cur, item_id, data)
             elif entity == "order_status":
                 result = update_order_status(cur, item_id, data.get("status"))
             elif entity == "orders":
@@ -2484,6 +2622,8 @@ def handler(event, context):
                 result = delete_group(cur, item_id, cascade=cascade)
             elif entity == "finished_products":
                 result = delete_finished_product(cur, item_id)
+            elif entity == "specifications":
+                result = delete_specification(cur, item_id)
             elif entity == "semi_products":
                 result = delete_semi_product(cur, item_id)
             elif entity in ("materials", "fittings", "operations", "clients"):

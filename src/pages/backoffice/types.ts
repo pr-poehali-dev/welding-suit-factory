@@ -303,6 +303,17 @@ export interface SemiProduct {
   materials: SemiProductMaterial[];
   operations: SemiProductOperation[];
   components?: SemiProductComponent[];
+  specification_id?: number | null;
+  spec_qty?: number;
+}
+
+export interface Specification {
+  id: number;
+  finished_product_id: number;
+  name: string;
+  is_active: boolean;
+  created_at?: string;
+  semi_products: SemiProduct[];
 }
 
 export interface StockMaterial {
