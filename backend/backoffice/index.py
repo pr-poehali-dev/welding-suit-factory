@@ -4,6 +4,7 @@
 """
 import json
 import os
+import traceback
 import psycopg2
 from datetime import datetime, date, timedelta
 
@@ -2132,6 +2133,8 @@ def handler(event, context):
     except Exception as e:
         conn.rollback()
         msg = str(e)
+        print(f"ERROR entity={entity} method={method}: {msg}")
+        print(traceback.format_exc())
         if "unique" in msg.lower() or "duplicate" in msg.lower():
             return err("Запись с такими данными уже существует", 400)
         return err(msg, 500)
