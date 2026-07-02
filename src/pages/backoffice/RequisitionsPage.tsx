@@ -142,6 +142,40 @@ export default function RequisitionsPage() {
   const addRow = () => setRows((prev) => [...prev, { material_id: 0, issued_qty: "", norm_qty: "" }]);
   const delRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
 
+  // автоподстановка материалов и норм из выбранного заказ-наряда
+  const onSelectWorkOrder = (value: string) => {
+    setWorkOrderId(value);
+    if (!value) return;
+    const wo = workOrders.find((w) => String(w.id) === value);
+    if (!wo) return;
+
+    // склад из наряда
+    if (wo.warehouse_id) setWarehouseId(wo.warehouse_id);
+
+    // собираем материалы из операций наряда: норма × количество наряда
+    const woQty = Number(wo.qty) || 1;
+    const map = new Map<number, number>();
+    (wo.operations ?? []).forEach((op) => {
+      if (op.material_id && op.planned_material_norm != null) {
+        const total = Number(op.planned_material_norm) * woQty;
+        map.set(op.material_id, (map.get(op.material_id) || 0) + total);
+      }
+    });
+
+    if (map.size === 0) {
+      toast({ title: "В заказ-наряде нет норм материалов", description: "Заполните позиции вручную" });
+      return;
+    }
+
+    const filled: NewItem[] = Array.from(map.entries()).map(([material_id, norm]) => ({
+      material_id,
+      issued_qty: String(norm),
+      norm_qty: String(norm),
+    }));
+    setRows(filled);
+    toast({ title: "Позиции заполнены из заказ-наряда" });
+  };
+
   const canIssue =
     warehouseId > 0 && workerId > 0 &&
     rows.some((r) => r.material_id && Number(r.issued_qty) > 0);
@@ -291,13 +325,16 @@ export default function RequisitionsPage() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-500">Заказ-наряд (необязательно)</label>
-              <select value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
+              <label className="mb-1 block text-xs text-slate-500">Заказ-наряд (автозаполнение материалов и норм)</label>
+              <select value={workOrderId} onChange={(e) => onSelectWorkOrder(e.target.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
                 <option value="">— без привязки —</option>
                 {workOrders.map((wo) => (
                   <option key={wo.id} value={wo.id}>{wo.work_order_number} {wo.order_number ? `(${wo.order_number})` : ""}</option>
                 ))}
               </select>
+              {workOrderId && (
+                <p className="mt-1 text-[11px] text-slate-400">Позиции подставлены из заказ-наряда — можно скорректировать вручную.</p>
+              )}
             </div>
 
             <div className="rounded-lg border border-slate-200 p-2">
