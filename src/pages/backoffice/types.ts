@@ -172,7 +172,12 @@ export const PERM_MODULES: PermModule[] = [
   { module: "stock", label: "Склад", hasEdit: true },
   { module: "clients", label: "Клиенты", hasEdit: true },
   { module: "workers", label: "Сотрудники", hasEdit: true },
-  { module: "materials", label: "Материалы", hasEdit: true },
+  {
+    module: "materials",
+    label: "Материалы",
+    hasEdit: true,
+    extra: [{ key: "materials.delete", label: "Удаление материалов" }],
+  },
   { module: "fittings", label: "Фурнитура", hasEdit: true },
   { module: "operations", label: "Операции", hasEdit: true },
   { module: "semi_products", label: "Полуфабрикаты", hasEdit: true },

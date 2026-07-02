@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { boFetch, Material, Unit, Group, Supplier, VatRate } from "@/pages/backoffice/types";
 import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
-import MaterialReceiptWizard from "@/components/backoffice/MaterialReceiptWizard";
 import { useAuth } from "@/context/AuthContext";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -27,9 +26,8 @@ export default function MaterialsPage() {
   const { user, can } = useAuth();
   const canSeeSupplier =
     user?.access_level === "director" || user?.access_level === "storekeeper";
-  const canReceive = can("stock.edit");
+  const canDelete = can("materials.delete");
   const [open, setOpen] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
   const [form, setForm] = useState<Partial<Material>>(EMPTY);
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
@@ -127,11 +125,6 @@ export default function MaterialsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-56 bg-white text-slate-800 border-slate-300"
           />
-          {canReceive && (
-            <Button onClick={() => setReceiptOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-              <Icon name="PackagePlus" size={16} /> Поступление
-            </Button>
-          )}
           <Button onClick={openNew} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
             <Icon name="Plus" size={16} /> Добавить
           </Button>
@@ -184,9 +177,11 @@ export default function MaterialsPage() {
                           <Button variant="ghost" size="sm" onClick={() => openEdit(m)}>
                             <Icon name="Pencil" size={15} />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => remove.mutate(m.id)}>
-                            <Icon name="Trash2" size={15} className="text-red-500" />
-                          </Button>
+                          {canDelete && (
+                            <Button variant="ghost" size="sm" onClick={() => remove.mutate(m.id)}>
+                              <Icon name="Trash2" size={15} className="text-red-500" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -330,12 +325,6 @@ export default function MaterialsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <MaterialReceiptWizard
-        open={receiptOpen}
-        onClose={() => setReceiptOpen(false)}
-        defaultGroupId={groupFilter && groupFilter > 0 ? groupFilter : null}
-      />
     </div>
   );
 }

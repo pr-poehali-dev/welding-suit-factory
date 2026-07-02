@@ -1938,6 +1938,9 @@ def handler(event, context):
             need = f"{module}.view" if method == "GET" else f"{module}.edit"
             if not has_perm(perms, need):
                 return err("Недостаточно прав", 403)
+            # удаление материала требует отдельного права materials.delete
+            if method == "DELETE" and entity == "materials" and not has_perm(perms, "materials.delete"):
+                return err("Недостаточно прав для удаления", 403)
         elif module == "__deny__" and entity not in ("",):
             return err("Недостаточно прав", 403)
 

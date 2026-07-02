@@ -6,6 +6,8 @@ import {
   StockItem,
   ITEM_TYPES,
 } from "@/pages/backoffice/types";
+import MaterialReceiptWizard from "@/components/backoffice/MaterialReceiptWizard";
+import { useAuth } from "@/context/AuthContext";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,10 +32,13 @@ interface MovementForm {
 
 export default function StockPage() {
   const qc = useQueryClient();
+  const { can } = useAuth();
+  const canReceive = can("stock.edit");
   const [activeWarehouse, setActiveWarehouse] = useState<number>(0);
   const [activeType, setActiveType] = useState("material");
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveForm, setMoveForm] = useState<MovementForm | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   /* --- данные --- */
   const { data: warehouses = [] } = useQuery<Warehouse[]>({
@@ -82,7 +87,14 @@ export default function StockPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold text-slate-800">Склад</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">Склад</h1>
+        {canReceive && (
+          <Button onClick={() => setReceiptOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Icon name="PackagePlus" size={16} /> Поступление материала
+          </Button>
+        )}
+      </div>
 
       {/* --- Вкладки складов --- */}
       <div className="mb-3 flex flex-wrap gap-2">
@@ -231,6 +243,8 @@ export default function StockPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MaterialReceiptWizard open={receiptOpen} onClose={() => setReceiptOpen(false)} />
     </div>
   );
 }
