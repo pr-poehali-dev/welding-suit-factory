@@ -9,6 +9,7 @@ import {
   Material,
   WorkOrder,
   WorkerBalance,
+  StockItem,
 } from "@/pages/backoffice/types";
 import { printRequisition } from "@/pages/backoffice/printTemplates";
 import Icon from "@/components/ui/icon";
@@ -69,6 +70,18 @@ export default function RequisitionsPage() {
     queryKey: ["bo-work-orders"],
     queryFn: () => boFetch("work_orders"),
   });
+  const { data: stock = [] } = useQuery<StockItem[]>({
+    queryKey: ["bo-stock"],
+    queryFn: () => boFetch("stock"),
+  });
+
+  // доступный остаток материала на выбранном складе (qty − reserved_qty)
+  const availableQty = (materialId: number): number | null => {
+    if (!warehouseId || !materialId) return null;
+    return stock
+      .filter((s) => s.warehouse_id === warehouseId && s.item_type === "material" && s.item_id === materialId)
+      .reduce((a, s) => a + (Number(s.qty) - Number(s.reserved_qty)), 0);
+  };
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["bo-requisitions"] });
@@ -344,28 +357,47 @@ export default function RequisitionsPage() {
                   <Icon name="Plus" size={13} /> Строка
                 </Button>
               </div>
-              {rows.map((r, i) => (
-                <div key={i} className="mb-2 grid grid-cols-[1fr_90px_90px_32px] items-end gap-2">
-                  <div>
-                    <label className="mb-0.5 block text-[11px] text-slate-400">Материал</label>
-                    <select value={r.material_id} onChange={(e) => setRow(i, { material_id: Number(e.target.value) })} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
-                      <option value={0}>--</option>
-                      {materials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
+              {rows.map((r, i) => {
+                const avail = availableQty(r.material_id);
+                const short = avail != null && Number(r.issued_qty) > avail;
+                return (
+                  <div key={i} className="mb-2">
+                    <div className="grid grid-cols-[1fr_90px_90px_32px] items-end gap-2">
+                      <div>
+                        <label className="mb-0.5 block text-[11px] text-slate-400">Материал</label>
+                        <select value={r.material_id} onChange={(e) => setRow(i, { material_id: Number(e.target.value) })} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
+                          <option value={0}>--</option>
+                          {materials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-[11px] text-slate-400">Выдать</label>
+                        <Input type="number" step="0.001" value={r.issued_qty} onChange={(e) => setRow(i, { issued_qty: e.target.value })} className={`h-9 bg-white ${short ? "border-red-400" : "border-slate-300"}`} />
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-[11px] text-slate-400">Норма</label>
+                        <Input type="number" step="0.001" value={r.norm_qty} onChange={(e) => setRow(i, { norm_qty: e.target.value })} className="h-9 border-slate-300 bg-white" />
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={() => delRow(i)} disabled={rows.length === 1} className="h-9">
+                        <Icon name="Trash2" size={15} className="text-red-500" />
+                      </Button>
+                    </div>
+                    {r.material_id > 0 && (
+                      avail == null ? (
+                        <p className="mt-0.5 text-[11px] text-slate-400">Выберите склад, чтобы увидеть остаток</p>
+                      ) : short ? (
+                        <p className="mt-0.5 text-[11px] font-medium text-red-500">
+                          На складе доступно только {avail.toLocaleString("ru", { maximumFractionDigits: 4 })} — недостаточно
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          Доступно на складе: {avail.toLocaleString("ru", { maximumFractionDigits: 4 })}
+                        </p>
+                      )
+                    )}
                   </div>
-                  <div>
-                    <label className="mb-0.5 block text-[11px] text-slate-400">Выдать</label>
-                    <Input type="number" step="0.001" value={r.issued_qty} onChange={(e) => setRow(i, { issued_qty: e.target.value })} className="h-9 border-slate-300 bg-white" />
-                  </div>
-                  <div>
-                    <label className="mb-0.5 block text-[11px] text-slate-400">Норма</label>
-                    <Input type="number" step="0.001" value={r.norm_qty} onChange={(e) => setRow(i, { norm_qty: e.target.value })} className="h-9 border-slate-300 bg-white" />
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => delRow(i)} disabled={rows.length === 1} className="h-9">
-                    <Icon name="Trash2" size={15} className="text-red-500" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div>
