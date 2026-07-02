@@ -133,7 +133,7 @@ export const ROLE_TEMPLATES: Record<string, Permissions> = {
     "orders.view": true, "orders.hide_client": true,
     "operations.view": true,
     "semi_products.view": true,
-    "stock.view": true,
+    "stock.view": true, "stock.edit": true,
     "workers.view": true,
     "reports.view": true,
   },
@@ -571,6 +571,71 @@ export interface StockOnDateReport {
   date: string;
   warehouse_id: number | null;
   sections: StockOnDateSection[];
+}
+
+// -------------------- требования-накладные --------------------
+
+export interface RequisitionItem {
+  id: number;
+  requisition_id: number;
+  material_id: number;
+  issued_qty: number;
+  returned_qty: number;
+  norm_qty: number | null;
+  notes: string | null;
+  material_name?: string;
+  unit_short?: string;
+}
+
+export interface Requisition {
+  id: number;
+  doc_number: string;
+  warehouse_id: number;
+  worker_id: number;
+  work_order_id: number | null;
+  status: string;
+  issued_by: number | null;
+  notes: string | null;
+  created_at: string;
+  closed_at: string | null;
+  warehouse_name?: string;
+  worker_name?: string;
+  issued_by_name?: string;
+  work_order_number?: string;
+  items: RequisitionItem[];
+}
+
+export interface WorkerBalance {
+  id: number;
+  worker_id: number;
+  material_id: number;
+  qty: number;
+  worker_name?: string;
+  material_name?: string;
+  unit_short?: string;
+}
+
+export interface OveruseRow {
+  work_order_id: number | null;
+  work_order_number: string | null;
+  material_id: number;
+  material_name: string;
+  unit_short: string;
+  worker_name: string | null;
+  plan_qty?: number;
+  fact_qty: number;
+  issued_qty?: number;
+  returned_qty?: number;
+  norm_qty?: number;
+  overuse_qty: number;
+  price: number;
+  overuse_cost: number;
+}
+
+export interface OveruseReport {
+  mode: string;
+  rows: OveruseRow[];
+  total_cost: number;
 }
 
 // ============================================================

@@ -107,12 +107,30 @@ export default function StockOnDateReportPage() {
   const warehouseName =
     warehouses.find((w) => String(w.id) === warehouseId)?.name || "Все склады";
 
+  const grandTotal = useMemo(
+    () => printSections.reduce((a, s) => a + Number(s.total_amount || 0), 0),
+    [printSections],
+  );
+
   const exportExcel = () => {
     if (printSections.length === 0) {
       toast({ title: "Нечего выгружать", description: "Отметьте строки для выгрузки", variant: "destructive" });
       return;
     }
     const wb = XLSX.utils.book_new();
+
+    // Лист-свод: итоги по разделам + общий итог
+    const summary: (string | number)[][] = [
+      [`Остатки на ${date} — ${warehouseName}`],
+      [],
+      ["Раздел", "Сумма остатка"],
+      ...printSections.map((s) => [s.label, Number(s.total_amount)]),
+      ["ВСЕГО", Number(grandTotal)],
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summary);
+    wsSummary["!cols"] = [{ wch: 28 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Свод");
+
     printSections.forEach((s) => {
       const aoa: (string | number)[][] = [
         [`Остатки на ${date} — ${warehouseName}`],
@@ -267,6 +285,13 @@ export default function StockOnDateReportPage() {
             </table>
           </div>
         )}
+
+        {printSections.length > 0 && (
+          <div className="mt-3 flex items-center justify-end gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="text-sm text-slate-500">Общий итог по выбранным ({totalSelected}):</span>
+            <span className="text-lg font-bold text-slate-800">{money(grandTotal)}</span>
+          </div>
+        )}
       </div>
 
       {/* ===== ПЕЧАТНАЯ ВЕРСИЯ (видна только при печати) ===== */}
@@ -307,6 +332,12 @@ export default function StockOnDateReportPage() {
             </table>
           </div>
         ))}
+        {printSections.length > 0 && (
+          <div className="mt-2 flex justify-between border-t-2 border-slate-800 pt-2 text-base font-bold">
+            <span>ОБЩИЙ ИТОГ:</span>
+            <span>{money(grandTotal)}</span>
+          </div>
+        )}
         {printSections.length === 0 && <p>Не выбрано ни одной строки для печати.</p>}
       </div>
     </div>

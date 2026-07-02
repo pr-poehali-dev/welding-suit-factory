@@ -30,6 +30,8 @@ import ProductionPage from "./pages/backoffice/ProductionPage";
 import OverconsumptionReport from "./pages/backoffice/OverconsumptionReport";
 import CostReport from "./pages/backoffice/CostReport";
 import StockOnDateReport from "./pages/backoffice/StockOnDateReport";
+import RequisitionsPage from "./pages/backoffice/RequisitionsPage";
+import MaterialOveruseReport from "./pages/backoffice/MaterialOveruseReport";
 import PeriodSettingsPage from "./pages/backoffice/PeriodSettingsPage";
 
 const queryClient = new QueryClient();
@@ -65,7 +67,9 @@ const App = () => (
             <Route path="/backoffice/stock" element={<BO module="stock"><StockPage /></BO>} />
             <Route path="/backoffice/orders" element={<BO module="orders"><OrdersPage /></BO>} />
             <Route path="/backoffice/production" element={<BO module="production"><ProductionPage /></BO>} />
+            <Route path="/backoffice/requisitions" element={<BO module="stock"><RequisitionsPage /></BO>} />
             <Route path="/backoffice/reports/stock-on-date" element={<BO module="stock"><StockOnDateReport /></BO>} />
+            <Route path="/backoffice/reports/overuse" element={<BO module="stock"><MaterialOveruseReport /></BO>} />
             <Route path="/backoffice/reports/overconsumption" element={<BO module="reports"><OverconsumptionReport /></BO>} />
             <Route path="/backoffice/reports/cost" element={<BO module="reports"><CostReport /></BO>} />
             <Route path="/backoffice/settings/period" element={<BO><PeriodSettingsPage /></BO>} />

@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Заказы", icon: "ClipboardList", path: "/backoffice/orders", module: "orders" },
   { label: "Производство", icon: "Factory", path: "/backoffice/production", module: "production" },
   { label: "Склад", icon: "Warehouse", path: "/backoffice/stock", module: "stock" },
+  { label: "Требования-накладные", icon: "ClipboardCheck", path: "/backoffice/requisitions", module: "stock" },
   {
     label: "Справочники",
     icon: "BookOpen",
@@ -59,6 +60,12 @@ const NAV_ITEMS: NavItem[] = [
         label: "Остатки на дату",
         icon: "PackageSearch",
         path: "/backoffice/reports/stock-on-date",
+        module: "stock",
+      },
+      {
+        label: "Перерасход материалов",
+        icon: "TrendingUp",
+        path: "/backoffice/reports/overuse",
         module: "stock",
       },
       {

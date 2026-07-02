@@ -10,6 +10,7 @@ import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
+import { printWorkOrder } from "@/pages/backoffice/printTemplates";
 import {
   Dialog,
   DialogContent,
@@ -152,9 +153,21 @@ export default function ProductionPage() {
       <Dialog open={!!detail} onOpenChange={() => setDetailWO(null)}>
         <DialogContent className="max-w-3xl bg-white text-slate-800 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              ЗН {detail?.work_order_number} — {detail?.semi_product_name}
-            </DialogTitle>
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <DialogTitle>
+                ЗН {detail?.work_order_number} — {detail?.semi_product_name}
+              </DialogTitle>
+              {detail && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => printWorkOrder({ ...detail, operations: sortedOps })}
+                  className="gap-1.5 border-slate-300 text-slate-600"
+                >
+                  <Icon name="Printer" size={15} /> Печать
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {detail && (

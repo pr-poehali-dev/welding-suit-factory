@@ -13,6 +13,7 @@ import {
 } from "@/pages/backoffice/types";
 import Icon from "@/components/ui/icon";
 import ProductPicker from "@/components/backoffice/ProductPicker";
+import { printOrder } from "@/pages/backoffice/printTemplates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -258,7 +259,19 @@ export default function OrdersPage() {
       <Dialog open={!!detailOrder} onOpenChange={() => setDetailOrder(null)}>
         <DialogContent className="max-w-2xl bg-white text-slate-800 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Заказ {detailOrder?.order_number}</DialogTitle>
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <DialogTitle>Заказ {detailOrder?.order_number}</DialogTitle>
+              {detailOrder && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => printOrder(detailOrder)}
+                  className="gap-1.5 border-slate-300 text-slate-600"
+                >
+                  <Icon name="Printer" size={15} /> Печать
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {detailOrder && (

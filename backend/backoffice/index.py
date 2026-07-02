@@ -77,7 +77,7 @@ DEFAULT_TEMPLATES = {
         "orders.view": True, "orders.hide_client": True,
         "operations.view": True,
         "semi_products.view": True,
-        "stock.view": True,
+        "stock.view": True, "stock.edit": True,
         "workers.view": True,
         "reports.view": True,
     },
@@ -129,6 +129,11 @@ ENTITY_MODULE = {
     "report_overconsumption": "reports",
     "report_cost": "reports",
     "report_stock_on_date": "stock",
+    "report_material_overuse": "stock",
+    "requisitions": "stock",
+    "requisition_return": "stock",
+    "requisition_close": "stock",
+    "worker_balances": "stock",
     "groups": None,  # вспомогательное — доступно всем авторизованным
     "period_settings": None,  # чтение всем; изменение проверяется отдельно (только директор)
 }
@@ -748,6 +753,268 @@ def material_receipt(cur, data, worker_id=None):
         "worker_id": worker_id,
     })
     return {"material_id": material_id, "name": mat_name, "unit_price": unit_price, "qty": qty, "amount": amount}
+
+
+# ========== ТРЕБОВАНИЯ-НАКЛАДНЫЕ (выдача материала рабочим) ==========
+def _adjust_worker_balance(cur, worker_id, material_id, delta):
+    cur.execute(
+        f"SELECT id, qty FROM {SCHEMA}.worker_material_balance WHERE worker_id=%s AND material_id=%s",
+        (worker_id, material_id),
+    )
+    row = cur.fetchone()
+    if row:
+        cur.execute(
+            f"UPDATE {SCHEMA}.worker_material_balance SET qty = qty + %s, updated_at=now() WHERE id=%s",
+            (delta, row[0]),
+        )
+    else:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.worker_material_balance (worker_id, material_id, qty) VALUES (%s,%s,%s)",
+            (worker_id, material_id, delta),
+        )
+
+
+def list_requisitions(cur, worker_id=None, work_order_id=None, status=None):
+    sql = f"""
+        SELECT r.*, w.name AS warehouse_name, wk.full_name AS worker_name,
+               ib.full_name AS issued_by_name, wo.work_order_number
+        FROM {SCHEMA}.material_requisitions r
+        JOIN {SCHEMA}.warehouses w ON r.warehouse_id = w.id
+        JOIN {SCHEMA}.workers wk ON r.worker_id = wk.id
+        LEFT JOIN {SCHEMA}.workers ib ON r.issued_by = ib.id
+        LEFT JOIN {SCHEMA}.work_orders wo ON r.work_order_id = wo.id
+        WHERE 1=1
+    """
+    params = []
+    if worker_id:
+        sql += " AND r.worker_id=%s"; params.append(int(worker_id))
+    if work_order_id:
+        sql += " AND r.work_order_id=%s"; params.append(int(work_order_id))
+    if status:
+        sql += " AND r.status=%s"; params.append(status)
+    sql += " ORDER BY r.created_at DESC"
+    cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for row in rows:
+        cur.execute(f"""
+            SELECT ri.*, m.name AS material_name, u.short_name AS unit_short
+            FROM {SCHEMA}.material_requisition_items ri
+            JOIN {SCHEMA}.materials m ON ri.material_id = m.id
+            LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+            WHERE ri.requisition_id=%s ORDER BY ri.id
+        """, (row["id"],))
+        ic = [d[0] for d in cur.description]
+        row["items"] = [dict(zip(ic, r)) for r in cur.fetchall()]
+    return rows
+
+
+def create_requisition(cur, data, issued_by=None):
+    """Выдача материала рабочему. Списывает со склада, добавляет на баланс рабочего.
+    data = {warehouse_id, worker_id, work_order_id?, notes?, items:[{material_id, issued_qty, norm_qty?, notes?}]}"""
+    warehouse_id = data.get("warehouse_id")
+    worker_id = data.get("worker_id")
+    items = data.get("items") or []
+    if not warehouse_id:
+        raise WorkerValidationError("Выберите склад")
+    if not worker_id:
+        raise WorkerValidationError("Выберите рабочего")
+    if not items:
+        raise WorkerValidationError("Добавьте хотя бы одну позицию")
+
+    assert_period_open(cur, datetime.now().date())
+
+    doc_number = "ТН-" + datetime.now().strftime("%y%m%d%H%M%S")
+    cur.execute(
+        f"""INSERT INTO {SCHEMA}.material_requisitions
+            (doc_number, warehouse_id, worker_id, work_order_id, status, issued_by, notes)
+            VALUES (%s,%s,%s,%s,'issued',%s,%s) RETURNING id""",
+        (doc_number, warehouse_id, worker_id, data.get("work_order_id"), issued_by, data.get("notes")),
+    )
+    req_id = cur.fetchone()[0]
+
+    for it in items:
+        mid = it.get("material_id")
+        qty = float(it.get("issued_qty") or 0)
+        if not mid or qty <= 0:
+            continue
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.material_requisition_items
+                (requisition_id, material_id, issued_qty, norm_qty, notes)
+                VALUES (%s,%s,%s,%s,%s)""",
+            (req_id, mid, qty, it.get("norm_qty"), it.get("notes")),
+        )
+        # списание со склада + движение + баланс рабочего
+        stock_movement(cur, {
+            "warehouse_id": warehouse_id, "item_type": "material", "item_id": mid,
+            "movement_type": "out", "qty": qty, "worker_id": worker_id,
+            "reason": f"Выдача по требованию {doc_number}",
+        })
+        _adjust_worker_balance(cur, worker_id, mid, qty)
+
+    return {"id": req_id, "doc_number": doc_number}
+
+
+def return_requisition_item(cur, data):
+    """Возврат материала с рук рабочего на склад.
+    data = {item_id, return_qty}"""
+    item_id = data.get("item_id")
+    return_qty = float(data.get("return_qty") or 0)
+    if not item_id or return_qty <= 0:
+        raise WorkerValidationError("Укажите количество возврата")
+
+    cur.execute(f"""
+        SELECT ri.requisition_id, ri.material_id, ri.issued_qty, ri.returned_qty,
+               r.warehouse_id, r.worker_id
+        FROM {SCHEMA}.material_requisition_items ri
+        JOIN {SCHEMA}.material_requisitions r ON ri.requisition_id = r.id
+        WHERE ri.id=%s
+    """, (item_id,))
+    row = cur.fetchone()
+    if not row:
+        raise WorkerValidationError("Позиция не найдена")
+    req_id, material_id, issued_qty, returned_qty, warehouse_id, worker_id = row
+    remaining = float(issued_qty) - float(returned_qty)
+    if return_qty > remaining + 1e-9:
+        raise WorkerValidationError(f"Нельзя вернуть больше, чем на руках ({remaining})")
+
+    assert_period_open(cur, datetime.now().date())
+
+    cur.execute(
+        f"UPDATE {SCHEMA}.material_requisition_items SET returned_qty = returned_qty + %s WHERE id=%s",
+        (return_qty, item_id),
+    )
+    stock_movement(cur, {
+        "warehouse_id": warehouse_id, "item_type": "material", "item_id": material_id,
+        "movement_type": "return", "qty": return_qty, "worker_id": worker_id,
+        "reason": "Возврат по требованию",
+    })
+    _adjust_worker_balance(cur, worker_id, material_id, -return_qty)
+    return {"ok": True}
+
+
+def close_requisition(cur, req_id):
+    cur.execute(
+        f"UPDATE {SCHEMA}.material_requisitions SET status='closed', closed_at=now() WHERE id=%s RETURNING id",
+        (req_id,),
+    )
+    return {"ok": bool(cur.fetchone())}
+
+
+def list_worker_balances(cur, worker_id=None):
+    sql = f"""
+        SELECT b.*, wk.full_name AS worker_name, m.name AS material_name,
+               u.short_name AS unit_short
+        FROM {SCHEMA}.worker_material_balance b
+        JOIN {SCHEMA}.workers wk ON b.worker_id = wk.id
+        JOIN {SCHEMA}.materials m ON b.material_id = m.id
+        LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+        WHERE b.qty <> 0
+    """
+    params = []
+    if worker_id:
+        sql += " AND b.worker_id=%s"; params.append(int(worker_id))
+    sql += " ORDER BY wk.full_name, m.name"
+    cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def report_material_overuse(cur, mode="requisition", work_order_id=None):
+    """Отчёт перерасхода материалов.
+    mode='requisition' — факт(выдано−возвращено) минус норма по требованиям (для проверки после закрытия).
+    mode='writeoff' — списание (actual_material_norm − planned) из заказ-нарядов (оперативный анализ)."""
+    if mode == "writeoff":
+        sql = f"""
+            SELECT wo.id AS work_order_id, wo.work_order_number, wo.qty AS wo_qty,
+                   m.id AS material_id, m.name AS material_name, u.short_name AS unit_short,
+                   COALESCE(m.price_per_unit,0) AS price,
+                   op.planned_material_norm, op.actual_material_norm,
+                   wk.full_name AS worker_name
+            FROM {SCHEMA}.work_order_operations op
+            JOIN {SCHEMA}.work_orders wo ON op.work_order_id = wo.id
+            JOIN {SCHEMA}.materials m ON op.material_id = m.id
+            LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+            LEFT JOIN {SCHEMA}.workers wk ON op.worker_id = wk.id
+            WHERE op.material_id IS NOT NULL AND op.actual_material_norm IS NOT NULL
+        """
+        params = []
+        if work_order_id:
+            sql += " AND wo.id=%s"; params.append(int(work_order_id))
+        sql += " ORDER BY wo.work_order_number"
+        cur.execute(sql, params)
+        cols = [d[0] for d in cur.description]
+        rows = []
+        for r in cur.fetchall():
+            d = dict(zip(cols, r))
+            wo_qty = float(d["wo_qty"] or 1)
+            plan = float(d["planned_material_norm"] or 0) * wo_qty
+            fact = float(d["actual_material_norm"] or 0) * wo_qty
+            overuse = round(fact - plan, 4)
+            if overuse <= 0:
+                continue
+            price = float(d["price"] or 0)
+            rows.append({
+                "work_order_id": d["work_order_id"], "work_order_number": d["work_order_number"],
+                "material_id": d["material_id"], "material_name": d["material_name"],
+                "unit_short": d["unit_short"], "worker_name": d["worker_name"],
+                "plan_qty": round(plan, 4), "fact_qty": round(fact, 4),
+                "overuse_qty": overuse, "price": round(price, 2),
+                "overuse_cost": round(overuse * price, 2),
+            })
+        return {"mode": mode, "rows": rows, "total_cost": round(sum(x["overuse_cost"] for x in rows), 2)}
+
+    # mode == 'requisition'
+    sql = f"""
+        SELECT r.work_order_id, wo.work_order_number, wo.qty AS wo_qty, ri.material_id,
+               m.name AS material_name, u.short_name AS unit_short,
+               COALESCE(m.price_per_unit,0) AS price,
+               SUM(ri.issued_qty) AS issued, SUM(ri.returned_qty) AS returned,
+               MAX(wk.full_name) AS worker_name
+        FROM {SCHEMA}.material_requisition_items ri
+        JOIN {SCHEMA}.material_requisitions r ON ri.requisition_id = r.id
+        LEFT JOIN {SCHEMA}.work_orders wo ON r.work_order_id = wo.id
+        JOIN {SCHEMA}.materials m ON ri.material_id = m.id
+        LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
+        LEFT JOIN {SCHEMA}.workers wk ON r.worker_id = wk.id
+        WHERE r.work_order_id IS NOT NULL
+    """
+    params = []
+    if work_order_id:
+        sql += " AND r.work_order_id=%s"; params.append(int(work_order_id))
+    sql += " GROUP BY r.work_order_id, wo.work_order_number, wo.qty, ri.material_id, m.name, u.short_name, m.price_per_unit"
+    sql += " ORDER BY wo.work_order_number"
+    cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    rows = []
+    for r in cur.fetchall():
+        d = dict(zip(cols, r))
+        wo_id = d["work_order_id"]
+        wo_qty = float(d["wo_qty"] or 1)
+        # норма из заказ-наряда для этого материала
+        cur.execute(f"""
+            SELECT COALESCE(SUM(op.planned_material_norm),0)
+            FROM {SCHEMA}.work_order_operations op
+            WHERE op.work_order_id=%s AND op.material_id=%s
+        """, (wo_id, d["material_id"]))
+        norm_per = float(cur.fetchone()[0] or 0)
+        norm_total = norm_per * wo_qty
+        fact = float(d["issued"] or 0) - float(d["returned"] or 0)
+        overuse = round(fact - norm_total, 4)
+        if overuse <= 0:
+            continue
+        price = float(d["price"] or 0)
+        rows.append({
+            "work_order_id": wo_id, "work_order_number": d["work_order_number"],
+            "material_id": d["material_id"], "material_name": d["material_name"],
+            "unit_short": d["unit_short"], "worker_name": d["worker_name"],
+            "issued_qty": round(float(d["issued"] or 0), 4),
+            "returned_qty": round(float(d["returned"] or 0), 4),
+            "norm_qty": round(norm_total, 4), "fact_qty": round(fact, 4),
+            "overuse_qty": overuse, "price": round(price, 2),
+            "overuse_cost": round(overuse * price, 2),
+        })
+    return {"mode": mode, "rows": rows, "total_cost": round(sum(x["overuse_cost"] for x in rows), 2)}
 
 
 # ========== FITTINGS ==========
@@ -2078,6 +2345,12 @@ def handler(event, context):
             elif entity == "report_stock_on_date":
                 hide_zero = str(qs.get("hide_zero", "1")).lower() not in ("0", "false", "no")
                 return ok(report_stock_on_date(cur, qs.get("date"), qs.get("warehouse_id"), hide_zero))
+            elif entity == "requisitions":
+                return ok(list_requisitions(cur, qs.get("worker_id"), qs.get("work_order_id"), qs.get("status")))
+            elif entity == "worker_balances":
+                return ok(list_worker_balances(cur, qs.get("worker_id")))
+            elif entity == "report_material_overuse":
+                return ok(report_material_overuse(cur, qs.get("mode", "requisition"), qs.get("work_order_id")))
             elif entity == "period_settings":
                 result = get_period_settings(cur, run_auto=True)
                 conn.commit()
@@ -2104,6 +2377,12 @@ def handler(event, context):
                 result = create_vat_rate(cur, data)
             elif entity == "material_receipt":
                 result = material_receipt(cur, data, user["id"])
+            elif entity == "requisitions":
+                result = create_requisition(cur, data, user["id"])
+            elif entity == "requisition_return":
+                result = return_requisition_item(cur, data)
+            elif entity == "requisition_close":
+                result = close_requisition(cur, int(data["id"]))
             elif entity == "fittings":
                 result = create_fitting(cur, data)
             elif entity == "operations":
