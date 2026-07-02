@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import * as XLSX from "xlsx";
 import {
   boFetch,
   Warehouse,
@@ -9,6 +10,7 @@ import {
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/use-toast";
 
 const money = (v: number) =>
   Number(v || 0).toLocaleString("ru", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -105,19 +107,53 @@ export default function StockOnDateReportPage() {
   const warehouseName =
     warehouses.find((w) => String(w.id) === warehouseId)?.name || "Все склады";
 
+  const exportExcel = () => {
+    if (printSections.length === 0) {
+      toast({ title: "Нечего выгружать", description: "Отметьте строки для выгрузки", variant: "destructive" });
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    printSections.forEach((s) => {
+      const aoa: (string | number)[][] = [
+        [`Остатки на ${date} — ${warehouseName}`],
+        [s.label],
+        ["Наименование", "Ед.", "Кол-во", "Цена", "Сумма"],
+      ];
+      s.rows.forEach((r) => {
+        aoa.push([r.name, r.unit_short || "", Number(r.qty), Number(r.price), Number(r.amount)]);
+      });
+      aoa.push(["Итого", "", "", "", Number(s.total_amount)]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 40 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+      const sheetName = s.label.slice(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+    XLSX.writeFile(wb, `Остатки_${date}.xlsx`);
+  };
+
   return (
     <div>
       {/* ===== ПАНЕЛЬ (не печатается) ===== */}
       <div className="print:hidden">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-800">Остатки на дату</h1>
-          <Button
-            onClick={() => window.print()}
-            disabled={totalSelected === 0}
-            className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
-          >
-            <Icon name="Printer" size={16} /> Печать ({totalSelected})
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={exportExcel}
+              disabled={totalSelected === 0}
+              variant="outline"
+              className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50"
+            >
+              <Icon name="FileSpreadsheet" size={16} /> Выгрузить в Excel
+            </Button>
+            <Button
+              onClick={() => window.print()}
+              disabled={totalSelected === 0}
+              className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <Icon name="Printer" size={16} /> Печать ({totalSelected})
+            </Button>
+          </div>
         </div>
 
         <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3">
