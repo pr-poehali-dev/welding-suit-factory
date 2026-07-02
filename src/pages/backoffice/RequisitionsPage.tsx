@@ -189,8 +189,14 @@ export default function RequisitionsPage() {
     toast({ title: "Позиции заполнены из заказ-наряда" });
   };
 
+  const hasShortage = rows.some((r) => {
+    if (!r.material_id || !(Number(r.issued_qty) > 0)) return false;
+    const avail = availableQty(r.material_id);
+    return avail != null && Number(r.issued_qty) > avail;
+  });
+
   const canIssue =
-    warehouseId > 0 && workerId > 0 &&
+    warehouseId > 0 && workerId > 0 && !hasShortage &&
     rows.some((r) => r.material_id && Number(r.issued_qty) > 0);
 
   return (
@@ -405,7 +411,12 @@ export default function RequisitionsPage() {
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} className="h-9 border-slate-300 bg-white" />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {hasShortage && (
+              <span className="text-xs font-medium text-red-500 sm:mr-auto">
+                Недостаточно материала на складе — исправьте количество
+              </span>
+            )}
             <Button variant="outline" onClick={() => setIssueOpen(false)} className="border-slate-300 text-slate-600">Отмена</Button>
             <Button onClick={() => issueMut.mutate()} disabled={!canIssue || issueMut.isPending} className="bg-blue-600 text-white hover:bg-blue-700">
               {issueMut.isPending ? "Выдача..." : "Выдать"}

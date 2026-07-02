@@ -824,6 +824,25 @@ def create_requisition(cur, data, issued_by=None):
 
     assert_period_open(cur, datetime.now().date())
 
+    # контроль наличия материала на складе (нельзя выдать больше доступного)
+    for it in items:
+        mid = it.get("material_id")
+        qty = float(it.get("issued_qty") or 0)
+        if not mid or qty <= 0:
+            continue
+        cur.execute(
+            f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='material' AND item_id=%s AND warehouse_id=%s",
+            (mid, warehouse_id),
+        )
+        avail = float(cur.fetchone()[0] or 0)
+        if qty > avail + 1e-9:
+            cur.execute(f"SELECT name FROM {SCHEMA}.materials WHERE id=%s", (mid,))
+            nm = cur.fetchone()
+            nm = nm[0] if nm else f"#{mid}"
+            raise WorkerValidationError(
+                f"Недостаточно материала «{nm}» на складе: нужно {qty:g}, доступно {avail:g}"
+            )
+
     doc_number = "ТН-" + datetime.now().strftime("%y%m%d%H%M%S")
     cur.execute(
         f"""INSERT INTO {SCHEMA}.material_requisitions
