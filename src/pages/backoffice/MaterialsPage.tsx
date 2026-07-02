@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { boFetch, Material, Unit, Group } from "@/pages/backoffice/types";
+import { boFetch, Material, Unit, Group, Supplier, VatRate } from "@/pages/backoffice/types";
 import GroupManager, { buildTree, collectIds, TreeGroup } from "@/components/backoffice/GroupManager";
+import MaterialReceiptWizard from "@/components/backoffice/MaterialReceiptWizard";
+import { useAuth } from "@/context/AuthContext";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,16 +19,20 @@ import {
 
 const EMPTY: Partial<Material> = {
   name: "", sku: "", unit_id: 0, price_per_unit: 0, description: "", is_active: true, group_id: null,
+  color: "", density: "", supplier_id: null, vat_rate_id: null,
 };
 
 export default function MaterialsPage() {
   const qc = useQueryClient();
+  const { user, can } = useAuth();
+  const canSeeSupplier =
+    user?.access_level === "director" || user?.access_level === "storekeeper";
+  const canReceive = can("stock.edit");
   const [open, setOpen] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
   const [form, setForm] = useState<Partial<Material>>(EMPTY);
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
-  const [unitOpen, setUnitOpen] = useState(false);
-  const [unitForm, setUnitForm] = useState({ name: "", short_name: "" });
 
   const { data: groups = [] } = useQuery<Group[]>({
     queryKey: ["bo-groups", "materials"],
@@ -41,6 +47,17 @@ export default function MaterialsPage() {
   const { data: units = [] } = useQuery<Unit[]>({
     queryKey: ["bo-units"],
     queryFn: () => boFetch("units"),
+  });
+
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
+    queryKey: ["bo-suppliers"],
+    queryFn: () => boFetch("suppliers"),
+    enabled: canSeeSupplier,
+  });
+
+  const { data: vatRates = [] } = useQuery<VatRate[]>({
+    queryKey: ["bo-vat-rates"],
+    queryFn: () => boFetch("vat_rates"),
   });
 
   const save = useMutation({
@@ -110,6 +127,11 @@ export default function MaterialsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-56 bg-white text-slate-800 border-slate-300"
           />
+          {canReceive && (
+            <Button onClick={() => setReceiptOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Icon name="PackagePlus" size={16} /> Поступление
+            </Button>
+          )}
           <Button onClick={openNew} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
             <Icon name="Plus" size={16} /> Добавить
           </Button>
@@ -130,7 +152,9 @@ export default function MaterialsPage() {
                     <th className="px-4 py-3">Название</th>
                     <th className="px-4 py-3">Артикул</th>
                     <th className="px-4 py-3">Ед. изм.</th>
+                    <th className="px-4 py-3 text-right">Остаток</th>
                     <th className="px-4 py-3">Цена за ед.</th>
+                    {canSeeSupplier && <th className="px-4 py-3">Поставщик</th>}
                     <th className="px-4 py-3">Активен</th>
                     <th className="px-4 py-3 text-right">Действия</th>
                   </tr>
@@ -141,7 +165,13 @@ export default function MaterialsPage() {
                       <td className="px-4 py-2.5 font-medium text-slate-700">{m.name}</td>
                       <td className="px-4 py-2.5 font-mono text-slate-600">{m.sku}</td>
                       <td className="px-4 py-2.5 text-slate-600">{m.unit_short || m.unit_name || "-"}</td>
+                      <td className="px-4 py-2.5 text-right font-medium text-slate-700">
+                        {Number(m.stock_qty || 0).toLocaleString("ru")}
+                      </td>
                       <td className="px-4 py-2.5 text-slate-600">{Number(m.price_per_unit).toLocaleString("ru")} r.</td>
+                      {canSeeSupplier && (
+                        <td className="px-4 py-2.5 text-slate-600">{m.supplier_name || "—"}</td>
+                      )}
                       <td className="px-4 py-2.5">
                         {m.is_active ? (
                           <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Да</span>
@@ -162,7 +192,7 @@ export default function MaterialsPage() {
                     </tr>
                   ))}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
+                    <tr><td colSpan={canSeeSupplier ? 8 : 7} className="px-4 py-8 text-center text-slate-400">Нет записей</td></tr>
                   )}
                 </tbody>
               </table>
@@ -215,15 +245,63 @@ export default function MaterialsPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Цена за единицу</label>
-              <Input
-                className="bg-white text-slate-800 border-slate-300"
-                type="number"
-                step="0.01"
-                value={form.price_per_unit ?? 0}
-                onChange={(e) => setForm({ ...form, price_per_unit: Number(e.target.value) })}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Цвет</label>
+                <Input
+                  className="bg-white text-slate-800 border-slate-300"
+                  value={form.color ?? ""}
+                  onChange={(e) => setForm({ ...form, color: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Плотность / толщина</label>
+                <Input
+                  className="bg-white text-slate-800 border-slate-300"
+                  value={form.density ?? ""}
+                  onChange={(e) => setForm({ ...form, density: e.target.value })}
+                />
+              </div>
+            </div>
+            {canSeeSupplier && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Поставщик</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                  value={form.supplier_id ?? ""}
+                  onChange={(e) => setForm({ ...form, supplier_id: e.target.value ? Number(e.target.value) : null })}
+                >
+                  <option value="">— не указан —</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Цена за единицу</label>
+                <Input
+                  className="bg-white text-slate-800 border-slate-300"
+                  type="number"
+                  step="0.01"
+                  value={form.price_per_unit ?? 0}
+                  onChange={(e) => setForm({ ...form, price_per_unit: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-600">Ставка НДС</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                  value={form.vat_rate_id ?? ""}
+                  onChange={(e) => setForm({ ...form, vat_rate_id: e.target.value ? Number(e.target.value) : null })}
+                >
+                  <option value="">— не указана —</option>
+                  {vatRates.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Описание</label>
@@ -252,6 +330,12 @@ export default function MaterialsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MaterialReceiptWizard
+        open={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        defaultGroupId={groupFilter && groupFilter > 0 ? groupFilter : null}
+      />
     </div>
   );
 }

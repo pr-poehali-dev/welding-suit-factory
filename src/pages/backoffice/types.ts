@@ -195,8 +195,36 @@ export interface Material {
   group_name?: string;
   unit_name?: string;
   unit_short?: string;
+  color?: string | null;
+  density?: string | null;
+  supplier_id?: number | null;
+  supplier_name?: string | null;
+  vat_rate_id?: number | null;
+  vat_rate_name?: string | null;
+  vat_rate?: number | null;
+  stock_qty?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+  inn?: string | null;
+  phone?: string | null;
+  contact_person?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface VatRate {
+  id: number;
+  name: string;
+  rate: number;
+  is_no_vat: boolean;
+  is_active: boolean;
+  sort_order: number;
 }
 
 export interface Fitting {

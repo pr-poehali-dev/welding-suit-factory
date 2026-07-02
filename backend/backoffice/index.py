@@ -103,6 +103,9 @@ ENTITY_MODULE = {
     "workers": "workers",
     "worker_perms": "workers",
     "materials": "materials",
+    "suppliers": "materials",
+    "vat_rates": "materials",
+    "material_receipt": "stock",
     "fittings": "fittings",
     "operations": "operations",
     "semi_products": "semi_products",
@@ -589,10 +592,15 @@ def update_worker(cur, wid, data):
 # ========== MATERIALS ==========
 def list_materials(cur):
     cur.execute(f"""
-        SELECT m.*, u.name as unit_name, u.short_name as unit_short, g.name as group_name
+        SELECT m.*, u.name as unit_name, u.short_name as unit_short, g.name as group_name,
+               s.name as supplier_name, vr.name as vat_rate_name, vr.rate as vat_rate,
+               COALESCE((SELECT SUM(st.qty) FROM {SCHEMA}.stock st
+                         WHERE st.item_type='material' AND st.item_id=m.id), 0) as stock_qty
         FROM {SCHEMA}.materials m
         LEFT JOIN {SCHEMA}.units u ON m.unit_id = u.id
         LEFT JOIN {SCHEMA}.groups g ON m.group_id = g.id
+        LEFT JOIN {SCHEMA}.suppliers s ON m.supplier_id = s.id
+        LEFT JOIN {SCHEMA}.vat_rates vr ON m.vat_rate_id = vr.id
         ORDER BY m.name
     """)
     cols = [d[0] for d in cur.description]
@@ -601,8 +609,12 @@ def list_materials(cur):
 
 def create_material(cur, data):
     cur.execute(
-        f"INSERT INTO {SCHEMA}.materials (name, sku, unit_id, price_per_unit, description, group_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
-        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("group_id"))
+        f"""INSERT INTO {SCHEMA}.materials
+            (name, sku, unit_id, price_per_unit, description, group_id, color, density, supplier_id, vat_rate_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0),
+         data.get("description"), data.get("group_id"), data.get("color"), data.get("density"),
+         data.get("supplier_id"), data.get("vat_rate_id"))
     )
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, cur.fetchone()))
@@ -610,12 +622,131 @@ def create_material(cur, data):
 
 def update_material(cur, mid, data):
     cur.execute(
-        f"UPDATE {SCHEMA}.materials SET name=%s, sku=%s, unit_id=%s, price_per_unit=%s, description=%s, is_active=%s, group_id=%s, updated_at=now() WHERE id=%s RETURNING *",
-        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0), data.get("description"), data.get("is_active", True), data.get("group_id"), mid)
+        f"""UPDATE {SCHEMA}.materials SET name=%s, sku=%s, unit_id=%s, price_per_unit=%s,
+            description=%s, is_active=%s, group_id=%s, color=%s, density=%s,
+            supplier_id=%s, vat_rate_id=%s, updated_at=now() WHERE id=%s RETURNING *""",
+        (data["name"], data.get("sku"), data.get("unit_id"), data.get("price_per_unit", 0),
+         data.get("description"), data.get("is_active", True), data.get("group_id"),
+         data.get("color"), data.get("density"), data.get("supplier_id"), data.get("vat_rate_id"), mid)
     )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
     return dict(zip(cols, row)) if row else None
+
+
+# ========== SUPPLIERS ==========
+def list_suppliers(cur):
+    cur.execute(f"SELECT * FROM {SCHEMA}.suppliers ORDER BY name")
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def create_supplier(cur, data):
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.suppliers (name, inn, phone, contact_person, notes) VALUES (%s,%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("inn"), data.get("phone"), data.get("contact_person"), data.get("notes"))
+    )
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, cur.fetchone()))
+
+
+def update_supplier(cur, sid, data):
+    cur.execute(
+        f"UPDATE {SCHEMA}.suppliers SET name=%s, inn=%s, phone=%s, contact_person=%s, notes=%s, is_active=%s WHERE id=%s RETURNING *",
+        (data["name"], data.get("inn"), data.get("phone"), data.get("contact_person"),
+         data.get("notes"), data.get("is_active", True), sid)
+    )
+    cols = [d[0] for d in cur.description]
+    row = cur.fetchone()
+    return dict(zip(cols, row)) if row else None
+
+
+# ========== VAT RATES ==========
+def list_vat_rates(cur):
+    cur.execute(f"SELECT * FROM {SCHEMA}.vat_rates WHERE is_active ORDER BY sort_order, rate")
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def create_vat_rate(cur, data):
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.vat_rates (name, rate, is_no_vat, sort_order) VALUES (%s,%s,%s,%s) RETURNING *",
+        (data["name"], data.get("rate", 0), data.get("is_no_vat", False), data.get("sort_order", 0))
+    )
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, cur.fetchone()))
+
+
+def update_vat_rate(cur, vid, data):
+    cur.execute(
+        f"UPDATE {SCHEMA}.vat_rates SET name=%s, rate=%s, is_no_vat=%s, is_active=%s, sort_order=%s WHERE id=%s RETURNING *",
+        (data["name"], data.get("rate", 0), data.get("is_no_vat", False),
+         data.get("is_active", True), data.get("sort_order", 0), vid)
+    )
+    cols = [d[0] for d in cur.description]
+    row = cur.fetchone()
+    return dict(zip(cols, row)) if row else None
+
+
+# ========== MATERIAL RECEIPT (мастер поступления) ==========
+def material_receipt(cur, data, worker_id=None):
+    """Мастер поступления материала на склад.
+    data = {
+      material_id? (существующий) ИЛИ поля для нового: name, unit_id, group_id, color, density,
+      supplier_id, vat_rate_id, has_vat (bool),
+      warehouse_id (обязателен), qty (обязателен), amount (сумма, обязательна)
+    }
+    Цена захода = amount / qty. Обновляет price_per_unit материала."""
+    warehouse_id = data.get("warehouse_id")
+    qty = float(data.get("qty") or 0)
+    amount = float(data.get("amount") or 0)
+    if not warehouse_id:
+        raise WorkerValidationError("Выберите склад")
+    if qty <= 0:
+        raise WorkerValidationError("Количество должно быть больше нуля")
+    if amount < 0:
+        raise WorkerValidationError("Сумма не может быть отрицательной")
+
+    unit_price = round(amount / qty, 2) if qty else 0
+
+    material_id = data.get("material_id")
+    if material_id:
+        # обновляем цену захода и, при необходимости, поставщика/НДС
+        cur.execute(
+            f"UPDATE {SCHEMA}.materials SET price_per_unit=%s, updated_at=now() WHERE id=%s RETURNING id, name",
+            (unit_price, material_id)
+        )
+        row = cur.fetchone()
+        if not row:
+            raise WorkerValidationError("Материал не найден")
+        mat_name = row[1]
+    else:
+        # создаём новый материал
+        if not data.get("name"):
+            raise WorkerValidationError("Укажите название материала")
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.materials
+                (name, sku, unit_id, price_per_unit, description, group_id, color, density, supplier_id, vat_rate_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, name""",
+            (data["name"], data.get("sku"), data.get("unit_id"), unit_price,
+             data.get("description"), data.get("group_id"), data.get("color"), data.get("density"),
+             data.get("supplier_id"), data.get("vat_rate_id"))
+        )
+        row = cur.fetchone()
+        material_id = row[0]
+        mat_name = row[1]
+
+    # движение прихода + обновление остатка
+    stock_movement(cur, {
+        "warehouse_id": warehouse_id,
+        "item_type": "material",
+        "item_id": material_id,
+        "movement_type": "in",
+        "qty": qty,
+        "reason": f"Поступление: {qty} × {unit_price} = {amount}",
+        "worker_id": worker_id,
+    })
+    return {"material_id": material_id, "name": mat_name, "unit_price": unit_price, "qty": qty, "amount": amount}
 
 
 # ========== FITTINGS ==========
@@ -1827,6 +1958,10 @@ def handler(event, context):
                 return ok(list_worker_perms(cur, int(qs.get("worker_id", 0))))
             elif entity == "materials":
                 return ok(list_materials(cur))
+            elif entity == "suppliers":
+                return ok(list_suppliers(cur))
+            elif entity == "vat_rates":
+                return ok(list_vat_rates(cur))
             elif entity == "fittings":
                 return ok(list_fittings(cur))
             elif entity == "operations":
@@ -1875,6 +2010,12 @@ def handler(event, context):
                 result = create_worker(cur, data)
             elif entity == "materials":
                 result = create_material(cur, data)
+            elif entity == "suppliers":
+                result = create_supplier(cur, data)
+            elif entity == "vat_rates":
+                result = create_vat_rate(cur, data)
+            elif entity == "material_receipt":
+                result = material_receipt(cur, data, user["id"])
             elif entity == "fittings":
                 result = create_fitting(cur, data)
             elif entity == "operations":
@@ -1924,6 +2065,10 @@ def handler(event, context):
                 result = update_worker(cur, item_id, data)
             elif entity == "materials":
                 result = update_material(cur, item_id, data)
+            elif entity == "suppliers":
+                result = update_supplier(cur, item_id, data)
+            elif entity == "vat_rates":
+                result = update_vat_rate(cur, item_id, data)
             elif entity == "fittings":
                 result = update_fitting(cur, item_id, data)
             elif entity == "operations":
