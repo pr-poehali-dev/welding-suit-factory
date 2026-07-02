@@ -1325,8 +1325,33 @@ def clone_semi_product(cur, data):
 
 
 # ========== СПЕЦИФИКАЦИИ (варианты состава изделия) ==========
+def _sp_cost(cur, sp_id, _seen=None):
+    """Плановая себестоимость полуфабриката: материалы + работа (+ вложенные ПФ). Возвращает (material_cost, labor_cost)."""
+    if _seen is None:
+        _seen = set()
+    if sp_id in _seen:
+        return 0.0, 0.0
+    _seen.add(sp_id)
+    cur.execute(f"""
+        SELECT COALESCE(SUM(spm.norm_qty * COALESCE(m.price_per_unit, 0)), 0)
+        FROM {SCHEMA}.semi_product_materials spm
+        JOIN {SCHEMA}.materials m ON spm.material_id = m.id
+        WHERE spm.semi_product_id = %s
+    """, (sp_id,))
+    mat = float(cur.fetchone()[0] or 0)
+    cur.execute(f"SELECT COALESCE(SUM(labor_cost), 0) FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (sp_id,))
+    lab = float(cur.fetchone()[0] or 0)
+    cur.execute(f"SELECT component_id, qty FROM {SCHEMA}.semi_product_components WHERE parent_id=%s", (sp_id,))
+    for cid, cqty in cur.fetchall():
+        cm, cl = _sp_cost(cur, cid, _seen)
+        q = float(cqty or 1)
+        mat += cm * q
+        lab += cl * q
+    return mat, lab
+
+
 def list_specifications(cur, finished_product_id):
-    """Список спецификаций изделия с их полуфабрикатами."""
+    """Список спецификаций изделия с их полуфабрикатами и плановой себестоимостью."""
     if not finished_product_id:
         raise WorkerValidationError("Не указано изделие")
     cur.execute(
@@ -1342,9 +1367,21 @@ def list_specifications(cur, finished_product_id):
         """, (sp["id"],))
         sc = [d[0] for d in cur.description]
         items = [dict(zip(sc, r)) for r in cur.fetchall()]
+        spec_mat = 0.0
+        spec_lab = 0.0
         for it in items:
             _load_sp_details(cur, it)
+            m, l = _sp_cost(cur, it["id"])
+            q = float(it.get("spec_qty") or 1)
+            it["material_cost"] = round(m, 2)
+            it["labor_cost_total"] = round(l, 2)
+            it["total_cost"] = round((m + l) * q, 2)
+            spec_mat += m * q
+            spec_lab += l * q
         sp["semi_products"] = items
+        sp["material_cost"] = round(spec_mat, 2)
+        sp["labor_cost"] = round(spec_lab, 2)
+        sp["total_cost"] = round(spec_mat + spec_lab, 2)
     return specs
 
 

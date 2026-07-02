@@ -112,6 +112,7 @@ export default function SpecItemsDialog({
                     <th className="px-3 py-2 font-medium">Название</th>
                     <th className="px-3 py-2 font-medium">Тип</th>
                     <th className="w-20 px-3 py-2 font-medium">Кол-во</th>
+                    <th className="w-32 px-3 py-2 text-right font-medium">Себестоимость</th>
                     <th className="w-32 px-3 py-2" />
                   </tr>
                 </thead>
@@ -123,6 +124,12 @@ export default function SpecItemsDialog({
                         {PF_TYPE_LABELS[(sp.pf_type ?? "material") as PfType]}
                       </td>
                       <td className="px-3 py-2 text-slate-600">{sp.spec_qty ?? 1}</td>
+                      <td
+                        className="px-3 py-2 text-right font-medium text-slate-700"
+                        title={`Материалы: ${Number(sp.material_cost ?? 0).toLocaleString("ru")} r. + Работа: ${Number(sp.labor_cost_total ?? 0).toLocaleString("ru")} r. × ${sp.spec_qty ?? 1} шт`}
+                      >
+                        {Number(sp.total_cost ?? 0).toLocaleString("ru")} r.
+                      </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1">
                           <Button
@@ -187,6 +194,17 @@ export default function SpecItemsDialog({
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td colSpan={3} className="px-3 py-2 text-right text-sm font-medium text-slate-600">
+                      Итого плановая себестоимость:
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm font-bold text-slate-800">
+                      {Number(specification?.total_cost ?? 0).toLocaleString("ru")} r.
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

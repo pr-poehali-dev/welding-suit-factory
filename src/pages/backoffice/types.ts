@@ -305,6 +305,9 @@ export interface SemiProduct {
   components?: SemiProductComponent[];
   specification_id?: number | null;
   spec_qty?: number;
+  material_cost?: number;
+  labor_cost_total?: number;
+  total_cost?: number;
 }
 
 export interface Specification {
@@ -314,6 +317,9 @@ export interface Specification {
   is_active: boolean;
   created_at?: string;
   semi_products: SemiProduct[];
+  material_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
 }
 
 export interface StockMaterial {

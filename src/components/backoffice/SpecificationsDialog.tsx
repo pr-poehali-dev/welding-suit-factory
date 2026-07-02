@@ -176,9 +176,17 @@ export default function SpecificationsDialog({
                     </button>
                   </div>
 
-                  <span className="flex-shrink-0 text-xs text-slate-400">
-                    ПФ: {spec.semi_products.length}
-                  </span>
+                  <div className="flex flex-shrink-0 flex-col items-end leading-tight">
+                    <span className="text-xs text-slate-400">
+                      ПФ: {spec.semi_products.length}
+                    </span>
+                    <span
+                      className="text-sm font-semibold text-slate-700"
+                      title={`Материалы: ${Number(spec.material_cost ?? 0).toLocaleString("ru")} r. + Работа: ${Number(spec.labor_cost ?? 0).toLocaleString("ru")} r.`}
+                    >
+                      {Number(spec.total_cost ?? 0).toLocaleString("ru")} r.
+                    </span>
+                  </div>
 
                   <Button
                     size="sm"
