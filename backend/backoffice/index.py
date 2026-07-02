@@ -128,6 +128,7 @@ ENTITY_MODULE = {
     "pending_operations": "production",
     "report_overconsumption": "reports",
     "report_cost": "reports",
+    "report_stock_on_date": "stock",
     "groups": None,  # вспомогательное — доступно всем авторизованным
     "period_settings": None,  # чтение всем; изменение проверяется отдельно (только директор)
 }
@@ -1423,6 +1424,87 @@ def list_stock_movements(cur, warehouse_id=None, item_type=None, item_id=None, l
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def report_stock_on_date(cur, on_date, warehouse_id=None, hide_zero=True):
+    """Остатки товаров на выбранную дату (включительно), восстановленные из движений.
+    Группируется по типам: material, fitting, semi_product, finished.
+    Возвращает {date, warehouse_id, sections: [{item_type, label, rows:[...], total_amount}]}."""
+    d = _parse_date(on_date) or datetime.now().date()
+
+    params = [d]
+    wh_filter = ""
+    if warehouse_id:
+        wh_filter = " AND sm.warehouse_id = %s"
+        params.append(int(warehouse_id))
+
+    cur.execute(f"""
+        SELECT sm.item_type, sm.item_id,
+               SUM(CASE WHEN sm.movement_type IN ('in','return') THEN sm.qty
+                        WHEN sm.movement_type IN ('out','write_off') THEN -sm.qty
+                        ELSE 0 END) AS qty
+        FROM {SCHEMA}.stock_movements sm
+        WHERE sm.created_at::date <= %s{wh_filter}
+        GROUP BY sm.item_type, sm.item_id
+    """, params)
+    raw = cur.fetchall()
+
+    type_meta = {
+        "material": {"label": "Материалы", "table": "materials", "priced": True},
+        "fitting": {"label": "Фурнитура", "table": "fittings", "priced": True},
+        "semi_product": {"label": "Полуфабрикаты", "table": "semi_products", "priced": False},
+        "finished": {"label": "Готовая продукция", "table": "finished_products", "priced": False},
+    }
+
+    sections = {k: {"item_type": k, "label": v["label"], "rows": [], "total_amount": 0.0}
+                for k, v in type_meta.items()}
+
+    for item_type, item_id, qty in raw:
+        qty = float(qty or 0)
+        if hide_zero and qty == 0:
+            continue
+        meta = type_meta.get(item_type)
+        if not meta:
+            continue
+        name, unit_short, price = "?", "", 0.0
+        if meta["priced"]:
+            cur.execute(f"""
+                SELECT t.name, u.short_name, COALESCE(t.price_per_unit, 0)
+                FROM {SCHEMA}.{meta['table']} t
+                LEFT JOIN {SCHEMA}.units u ON t.unit_id = u.id
+                WHERE t.id = %s
+            """, (item_id,))
+        else:
+            cur.execute(f"SELECT t.name, NULL, 0 FROM {SCHEMA}.{meta['table']} t WHERE t.id = %s", (item_id,))
+        r = cur.fetchone()
+        if r:
+            name = r[0]
+            unit_short = r[1] or ""
+            price = float(r[2] or 0)
+        amount = round(qty * price, 2)
+        sections[item_type]["rows"].append({
+            "item_type": item_type,
+            "item_id": item_id,
+            "name": name,
+            "unit_short": unit_short,
+            "qty": round(qty, 4),
+            "price": round(price, 2),
+            "amount": amount,
+        })
+        sections[item_type]["total_amount"] += amount
+
+    result_sections = []
+    for k in ("material", "fitting", "semi_product", "finished"):
+        sec = sections[k]
+        sec["rows"].sort(key=lambda x: x["name"].lower())
+        sec["total_amount"] = round(sec["total_amount"], 2)
+        result_sections.append(sec)
+
+    return {
+        "date": d.isoformat(),
+        "warehouse_id": int(warehouse_id) if warehouse_id else None,
+        "sections": result_sections,
+    }
+
+
 # ========== ORDERS ==========
 def list_orders(cur, status=None, hide_client=False):
     sql = f"""
@@ -1993,6 +2075,9 @@ def handler(event, context):
                 return ok(report_overconsumption(cur))
             elif entity == "report_cost" and qs.get("order_id"):
                 return ok(report_cost(cur, int(qs["order_id"])))
+            elif entity == "report_stock_on_date":
+                hide_zero = str(qs.get("hide_zero", "1")).lower() not in ("0", "false", "no")
+                return ok(report_stock_on_date(cur, qs.get("date"), qs.get("warehouse_id"), hide_zero))
             elif entity == "period_settings":
                 result = get_period_settings(cur, run_auto=True)
                 conn.commit()

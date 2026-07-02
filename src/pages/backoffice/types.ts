@@ -548,6 +548,31 @@ export interface CostReport {
   total_margin: number;
 }
 
+// -------------------- остатки на дату --------------------
+
+export interface StockOnDateRow {
+  item_type: string;
+  item_id: number;
+  name: string;
+  unit_short: string;
+  qty: number;
+  price: number;
+  amount: number;
+}
+
+export interface StockOnDateSection {
+  item_type: string;
+  label: string;
+  rows: StockOnDateRow[];
+  total_amount: number;
+}
+
+export interface StockOnDateReport {
+  date: string;
+  warehouse_id: number | null;
+  sections: StockOnDateSection[];
+}
+
 // ============================================================
 // Константы
 // ============================================================

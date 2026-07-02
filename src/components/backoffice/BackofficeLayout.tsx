@@ -56,6 +56,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: "BarChart3",
     children: [
       {
+        label: "Остатки на дату",
+        icon: "PackageSearch",
+        path: "/backoffice/reports/stock-on-date",
+        module: "stock",
+      },
+      {
         label: "Перерасход",
         icon: "AlertTriangle",
         path: "/backoffice/reports/overconsumption",
