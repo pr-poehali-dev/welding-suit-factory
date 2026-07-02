@@ -289,7 +289,6 @@ def assert_period_open(cur, doc_date):
         raise PeriodLockedError(
             f"Период до {lock.isoformat()} закрыт для редактирования. Обратитесь к директору для снятия блокировки."
         )
-    return {"ok": True, "count": len(perms)}
 
 
 # ========== GROUPS ==========
@@ -2133,8 +2132,7 @@ def handler(event, context):
     except Exception as e:
         conn.rollback()
         msg = str(e)
-        print(f"ERROR entity={entity} method={method}: {msg}")
-        print(traceback.format_exc())
+        print(f"ERROR entity={entity} method={method}: {msg}\n{traceback.format_exc()}")
         if "unique" in msg.lower() or "duplicate" in msg.lower():
             return err("Запись с такими данными уже существует", 400)
         return err(msg, 500)
