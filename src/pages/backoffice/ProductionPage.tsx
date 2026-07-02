@@ -4,6 +4,7 @@ import {
   boFetch,
   WorkOrder,
   WorkOrderOperation,
+  WorkOrderTask,
   Worker,
 } from "@/pages/backoffice/types";
 import Icon from "@/components/ui/icon";
@@ -43,6 +44,17 @@ const OP_STATUS_LABELS: Record<string, string> = {
   completed: "Выполнена",
 };
 
+const TASK_STATUS_COLORS: Record<string, string> = {
+  assigned: "bg-yellow-100 text-yellow-700",
+  in_progress: "bg-blue-100 text-blue-700",
+  done: "bg-green-100 text-green-700",
+};
+const TASK_STATUS_LABELS: Record<string, string> = {
+  assigned: "Назначено",
+  in_progress: "В работе",
+  done: "Готово",
+};
+
 export default function ProductionPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("");
@@ -75,6 +87,48 @@ export default function ProductionPage() {
     /* после invalidate нам нужно заново получить detail — через refetch */
     qc.invalidateQueries({ queryKey: ["bo-work-orders"] });
   };
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["bo-work-orders"] });
+    qc.invalidateQueries({ queryKey: ["bo-stock"] });
+  };
+
+  /* --- мутация: назначить задание --- */
+  const assignMut = useMutation({
+    mutationFn: (data: { work_order_id: number; worker_id: number; qty: number }) =>
+      boFetch("assign_task", "POST", data),
+    onSuccess: () => {
+      invalidateAll();
+      toast({ title: "Задание назначено" });
+    },
+    onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+  });
+
+  /* --- мутация: начать задание --- */
+  const startMut = useMutation({
+    mutationFn: (id: number) => boFetch("task_start", "POST", { id }),
+    onSuccess: () => {
+      invalidateAll();
+      toast({ title: "Задание начато" });
+    },
+    onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+  });
+
+  /* --- мутация: завершить задание --- */
+  const finishMut = useMutation<
+    { labor_amount: number; duration_seconds: number },
+    Error,
+    { id: number; actual_material_qty?: number }
+  >({
+    mutationFn: (data) => boFetch("task_finish", "POST", data),
+    onSuccess: (res) => {
+      invalidateAll();
+      toast({
+        title: `Задание выполнено, ФОТ: ${Number(res.labor_amount).toLocaleString("ru")} р.`,
+      });
+    },
+    onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+  });
 
   /* --- фильтр --- */
   const filtered = statusFilter
@@ -198,6 +252,17 @@ export default function ProductionPage() {
                   <p className="text-sm text-slate-400">Нет операций</p>
                 )}
               </div>
+
+              <TasksSection
+                detail={detail}
+                workers={workers}
+                onAssign={(data) => assignMut.mutate(data)}
+                assigning={assignMut.isPending}
+                onStart={(id) => startMut.mutate(id)}
+                starting={startMut.isPending}
+                onFinish={(data) => finishMut.mutate(data)}
+                finishing={finishMut.isPending}
+              />
             </div>
           )}
         </DialogContent>
@@ -299,6 +364,225 @@ function OperationRow({
           {op.completed_at && <span>Завершена: {new Date(op.completed_at).toLocaleString("ru")}</span>}
           {op.has_material_norm && op.actual_material_norm != null && (
             <span>Факт. норма: {op.actual_material_norm}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================ */
+/* Раздел «Задания сотрудникам» */
+/* ============================================================ */
+
+function TasksSection({
+  detail,
+  workers,
+  onAssign,
+  assigning,
+  onStart,
+  starting,
+  onFinish,
+  finishing,
+}: {
+  detail: WorkOrder;
+  workers: Worker[];
+  onAssign: (data: { work_order_id: number; worker_id: number; qty: number }) => void;
+  assigning: boolean;
+  onStart: (id: number) => void;
+  starting: boolean;
+  onFinish: (data: { id: number; actual_material_qty?: number }) => void;
+  finishing: boolean;
+}) {
+  const assignedQty = detail.assigned_qty ?? 0;
+  const doneQty = detail.done_qty ?? 0;
+  const remaining = detail.qty - assignedQty;
+  const tasks = detail.tasks ?? [];
+
+  const [workerId, setWorkerId] = useState<number>(0);
+  const [qty, setQty] = useState<number>(1);
+
+  const canAssign = remaining > 0;
+
+  return (
+    <div className="space-y-3 pt-2 border-t border-slate-200">
+      <h3 className="text-sm font-semibold text-slate-700">Задания сотрудникам</h3>
+
+      <p className="text-sm text-slate-500">
+        Назначено: <strong className="text-slate-700">{assignedQty}</strong> из{" "}
+        <strong className="text-slate-700">{detail.qty}</strong>, изготовлено:{" "}
+        <strong className="text-slate-700">{doneQty}</strong>
+      </p>
+
+      {canAssign && (
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="w-48">
+            <label className="mb-1 block text-xs text-slate-500">Сотрудник</label>
+            <select
+              className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800"
+              value={workerId}
+              onChange={(e) => setWorkerId(Number(e.target.value))}
+            >
+              <option value={0}>-- выберите --</option>
+              {workers.filter((w) => w.is_active).map((w) => (
+                <option key={w.id} value={w.id}>{w.full_name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="w-32">
+            <label className="mb-1 block text-xs text-slate-500">Количество</label>
+            <Input
+              className="h-9 bg-white text-slate-800 border-slate-300"
+              type="number"
+              min={1}
+              max={remaining}
+              value={qty}
+              onChange={(e) => setQty(Number(e.target.value))}
+            />
+          </div>
+          <Button
+            size="sm"
+            disabled={assigning || !workerId || qty < 1 || qty > remaining}
+            onClick={() => {
+              onAssign({ work_order_id: detail.id, worker_id: workerId, qty });
+              setWorkerId(0);
+              setQty(1);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
+          >
+            <Icon name="Plus" size={14} /> Назначить
+          </Button>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {tasks.map((task) => (
+          <TaskRow
+            key={task.id}
+            task={task}
+            onStart={onStart}
+            starting={starting}
+            onFinish={onFinish}
+            finishing={finishing}
+          />
+        ))}
+        {tasks.length === 0 && (
+          <p className="text-sm text-slate-400">Нет заданий</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================ */
+/* Строка задания */
+/* ============================================================ */
+
+function TaskRow({
+  task,
+  onStart,
+  starting,
+  onFinish,
+  finishing,
+}: {
+  task: WorkOrderTask;
+  onStart: (id: number) => void;
+  starting: boolean;
+  onFinish: (data: { id: number; actual_material_qty?: number }) => void;
+  finishing: boolean;
+}) {
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [actualQty, setActualQty] = useState<string>("");
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-slate-700">
+            {task.worker_name || `Сотрудник #${task.worker_id}`}
+          </span>
+          <span className="text-sm text-slate-500">× {task.qty}</span>
+          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TASK_STATUS_COLORS[task.status] ?? "bg-slate-100"}`}>
+            {TASK_STATUS_LABELS[task.status] ?? task.status}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {task.status === "assigned" && (
+            <Button
+              size="sm"
+              disabled={starting}
+              onClick={() => onStart(task.id)}
+              className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
+            >
+              <Icon name="Play" size={14} /> Начать
+            </Button>
+          )}
+          {task.status === "in_progress" && !finishOpen && (
+            <Button
+              size="sm"
+              onClick={() => setFinishOpen(true)}
+              className="bg-green-600 hover:bg-green-700 text-white gap-1"
+            >
+              <Icon name="Check" size={14} /> Завершить
+            </Button>
+          )}
+          {task.status === "done" && (
+            <span className="text-sm font-medium text-slate-700">
+              ФОТ: {Number(task.labor_amount).toLocaleString("ru")} р.
+            </span>
+          )}
+        </div>
+      </div>
+
+      {task.status === "in_progress" && finishOpen && (
+        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="w-40">
+            <label className="mb-1 block text-xs text-slate-500">
+              Факт. расход материала
+            </label>
+            <Input
+              className="h-9 bg-white text-slate-800 border-slate-300"
+              type="number"
+              step="0.001"
+              placeholder="необязательно"
+              value={actualQty}
+              onChange={(e) => setActualQty(e.target.value)}
+            />
+          </div>
+          <Button
+            size="sm"
+            disabled={finishing}
+            onClick={() => {
+              const trimmed = actualQty.trim();
+              onFinish({
+                id: task.id,
+                ...(trimmed !== "" ? { actual_material_qty: Number(trimmed) } : {}),
+              });
+              setFinishOpen(false);
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white gap-1"
+          >
+            <Icon name="Check" size={14} /> Готово
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setFinishOpen(false)}
+            className="text-slate-600 border-slate-300"
+          >
+            Отмена
+          </Button>
+        </div>
+      )}
+
+      {task.status === "done" && (
+        <div className="mt-1 flex gap-4 text-xs text-slate-500">
+          {task.duration_seconds != null && (
+            <span>Длительность: {Math.round(task.duration_seconds / 60)} мин</span>
+          )}
+          {task.actual_material_qty != null && (
+            <span>Факт. материал: {task.actual_material_qty}</span>
           )}
         </div>
       )}

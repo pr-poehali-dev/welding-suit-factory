@@ -4,6 +4,7 @@ import {
   boFetch,
   Warehouse,
   StockItem,
+  StockMovement,
   ITEM_TYPES,
 } from "@/pages/backoffice/types";
 import MaterialReceiptWizard from "@/components/backoffice/MaterialReceiptWizard";
@@ -17,15 +18,17 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 
-interface MovementForm {
-  warehouse_id: number;
-  item_type: string;
-  item_id: number;
-  item_name: string;
-  movement_type: "in" | "out";
+const MOVEMENT_LABELS: Record<string, string> = {
+  in: "Приход",
+  out: "Расход",
+  write_off: "Списание",
+  return: "Возврат",
+};
+
+interface EditForm {
+  id: number;
   qty: number;
   reason: string;
 }
@@ -36,9 +39,9 @@ export default function StockPage() {
   const canReceive = can("stock.edit");
   const [activeWarehouse, setActiveWarehouse] = useState<number>(0);
   const [activeType, setActiveType] = useState("material");
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [moveForm, setMoveForm] = useState<MovementForm | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [historyItem, setHistoryItem] = useState<StockItem | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   /* --- данные --- */
   const { data: warehouses = [] } = useQuery<Warehouse[]>({
@@ -51,16 +54,57 @@ export default function StockPage() {
     queryFn: () => boFetch("stock"),
   });
 
-  /* --- мутация: движение --- */
-  const moveMut = useMutation({
-    mutationFn: (data: Partial<MovementForm>) =>
-      boFetch("stock_movement", "POST", data),
+  /* --- история движений по выбранной позиции --- */
+  const historyKey = historyItem
+    ? [
+        "bo-stock-movements",
+        historyItem.warehouse_id,
+        historyItem.item_type,
+        historyItem.item_id,
+      ]
+    : ["bo-stock-movements"];
+
+  const { data: movements = [], isLoading: histLoading } = useQuery<
+    StockMovement[]
+  >({
+    queryKey: historyKey,
+    queryFn: () =>
+      boFetch("stock_movements", "GET", undefined, {
+        warehouse_id: String(historyItem!.warehouse_id),
+        item_type: historyItem!.item_type,
+        item_id: String(historyItem!.item_id),
+      }),
+    enabled: !!historyItem,
+  });
+
+  /* --- мутация: редактирование движения --- */
+  const editMut = useMutation({
+    mutationFn: (data: EditForm) =>
+      boFetch("stock_movement_edit", "PUT", {
+        id: data.id,
+        qty: data.qty,
+        reason: data.reason,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bo-stock"] });
-      toast({ title: "Движение проведено" });
-      setMoveOpen(false);
+      qc.invalidateQueries({ queryKey: historyKey });
+      toast({ title: "Движение обновлено" });
+      setEditForm(null);
     },
-    onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+    onError: (e: Error) =>
+      toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
+  });
+
+  /* --- мутация: снимок остатков --- */
+  const snapshotMut = useMutation<{ already?: boolean }, Error>({
+    mutationFn: () => boFetch("stock_snapshot", "POST", {}),
+    onSuccess: (res) => {
+      toast({
+        title: res.already ? "Снимок за сегодня уже есть" : "Снимок сохранён",
+      });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
   });
 
   /* --- выбираем первый склад если не выбран --- */
@@ -71,18 +115,9 @@ export default function StockPage() {
     (s) => s.warehouse_id === whId && s.item_type === activeType,
   );
 
-  /* --- открыть dialog прихода/расхода --- */
-  const openMovement = (item: StockItem, type: "in" | "out") => {
-    setMoveForm({
-      warehouse_id: item.warehouse_id,
-      item_type: item.item_type,
-      item_id: item.item_id,
-      item_name: item.item_name ?? `#${item.item_id}`,
-      movement_type: type,
-      qty: 0,
-      reason: "",
-    });
-    setMoveOpen(true);
+  const openHistory = (item: StockItem) => {
+    setEditForm(null);
+    setHistoryItem(item);
   };
 
   return (
@@ -90,9 +125,22 @@ export default function StockPage() {
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Склад</h1>
         {canReceive && (
-          <Button onClick={() => setReceiptOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Icon name="PackagePlus" size={16} /> Поступление материала
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => snapshotMut.mutate()}
+              disabled={snapshotMut.isPending}
+              className="gap-1.5 text-slate-700 border-slate-300 hover:bg-slate-50"
+            >
+              <Icon name="Camera" size={16} /> Снимок остатков
+            </Button>
+            <Button
+              onClick={() => setReceiptOpen(true)}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Icon name="PackagePlus" size={16} /> Поступление материала
+            </Button>
+          </div>
         )}
       </div>
 
@@ -135,7 +183,9 @@ export default function StockPage() {
 
       {/* --- Таблица --- */}
       {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-400"><Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...</div>
+        <div className="flex items-center gap-2 text-slate-400">
+          <Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-sm">
@@ -164,18 +214,10 @@ export default function StockPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => openMovement(s, "in")}
-                          className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                          onClick={() => openHistory(s)}
+                          className="gap-1 text-slate-700 border-slate-300 hover:bg-slate-50"
                         >
-                          <Icon name="ArrowDownToLine" size={14} /> Приход
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openMovement(s, "out")}
-                          className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
-                        >
-                          <Icon name="ArrowUpFromLine" size={14} /> Расход
+                          <Icon name="History" size={14} /> История
                         </Button>
                       </div>
                     </td>
@@ -190,57 +232,126 @@ export default function StockPage() {
         </div>
       )}
 
-      {/* --- Dialog: движение --- */}
-      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
-        <DialogContent className="max-w-sm bg-white text-slate-800">
+      {/* --- Dialog: история движений --- */}
+      <Dialog open={!!historyItem} onOpenChange={(o) => !o && setHistoryItem(null)}>
+        <DialogContent className="max-w-2xl bg-white text-slate-800">
           <DialogHeader>
             <DialogTitle>
-              {moveForm?.movement_type === "in" ? "Приход" : "Расход"}: {moveForm?.item_name}
+              История движений: {historyItem?.item_name ?? `#${historyItem?.item_id}`}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Количество</label>
-              <Input
-                className="bg-white text-slate-800 border-slate-300"
-                type="number"
-                min={0}
-                step="0.01"
-                value={moveForm?.qty ?? 0}
-                onChange={(e) => setMoveForm((p) => p ? { ...p, qty: Number(e.target.value) } : p)}
-              />
+          {histLoading ? (
+            <div className="flex items-center gap-2 text-slate-400">
+              <Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Причина / комментарий</label>
-              <Input
-                className="bg-white text-slate-800 border-slate-300"
-                value={moveForm?.reason ?? ""}
-                onChange={(e) => setMoveForm((p) => p ? { ...p, reason: e.target.value } : p)}
-              />
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-slate-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <th className="px-3 py-2">Дата</th>
+                    <th className="px-3 py-2">Тип</th>
+                    <th className="px-3 py-2 text-right">Кол-во</th>
+                    <th className="px-3 py-2">Причина</th>
+                    <th className="px-3 py-2 text-right"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((m) => (
+                    <tr key={m.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                        {new Date(m.created_at).toLocaleString("ru")}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {MOVEMENT_LABELS[m.movement_type] ?? m.movement_type}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-600">
+                        {Number(m.qty).toLocaleString("ru")}
+                      </td>
+                      <td className="px-3 py-2 text-slate-500">{m.reason || "—"}</td>
+                      <td className="px-3 py-2 text-right">
+                        {m.movement_type === "in" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setEditForm({
+                                id: m.id,
+                                qty: Number(m.qty),
+                                reason: m.reason ?? "",
+                              })
+                            }
+                            className="h-7 w-7 p-0 text-slate-600 border-slate-300 hover:bg-slate-50"
+                          >
+                            <Icon name="Pencil" size={14} />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {movements.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
+                        Нет движений
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMoveOpen(false)} className="text-slate-600 border-slate-300">Отмена</Button>
-            <Button
-              disabled={moveMut.isPending || !moveForm?.qty}
-              onClick={() => {
-                if (!moveForm) return;
-                moveMut.mutate({
-                  warehouse_id: moveForm.warehouse_id,
-                  item_type: moveForm.item_type,
-                  item_id: moveForm.item_id,
-                  movement_type: moveForm.movement_type,
-                  qty: moveForm.qty,
-                  reason: moveForm.reason,
-                });
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {moveMut.isPending ? "Проводка..." : "Провести"}
-            </Button>
-          </DialogFooter>
+          {editForm && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-sm font-medium text-slate-700">
+                Редактировать поступление
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Количество</label>
+                  <Input
+                    className="bg-white text-slate-800 border-slate-300"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editForm.qty}
+                    onChange={(e) =>
+                      setEditForm((p) => (p ? { ...p, qty: Number(e.target.value) } : p))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Причина</label>
+                  <Input
+                    className="bg-white text-slate-800 border-slate-300"
+                    value={editForm.reason}
+                    onChange={(e) =>
+                      setEditForm((p) => (p ? { ...p, reason: e.target.value } : p))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditForm(null)}
+                  className="text-slate-600 border-slate-300"
+                >
+                  Отмена
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={editMut.isPending || !editForm.qty}
+                  onClick={() => editForm && editMut.mutate(editForm)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {editMut.isPending ? "Сохранение..." : "Сохранить"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

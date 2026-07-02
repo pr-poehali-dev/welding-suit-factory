@@ -126,9 +126,15 @@ ENTITY_MODULE = {
     "stock": "stock",
     "stock_movement": "stock",
     "stock_movements": "stock",
+    "stock_movement_edit": "stock",
+    "stock_snapshot": "stock",
     "work_orders": "production",
     "complete_operation": "production",
     "pending_operations": "production",
+    "assign_task": "production",
+    "task_start": "production",
+    "task_finish": "production",
+    "worker_payroll": "reports",
     "report_overconsumption": "reports",
     "report_cost": "reports",
     "report_stock_on_date": "stock",
@@ -1637,6 +1643,32 @@ def list_finished_products(cur):
         for r in cur.fetchall():
             row = dict(zip(fc, r))
             fp_map[row["finished_product_id"]]["fittings"].append(row)
+        # плановая себестоимость по активной спецификации
+        for r in rows:
+            r["active_spec_name"] = None
+            r["plan_cost"] = 0
+        cur.execute(f"""
+            SELECT spec.finished_product_id, spec.name,
+                   COALESCE(SUM(
+                       COALESCE(s.spec_qty,1) * (
+                           COALESCE((SELECT SUM(spm.norm_qty * COALESCE(m.price_per_unit,0))
+                                     FROM {SCHEMA}.semi_product_materials spm
+                                     JOIN {SCHEMA}.materials m ON spm.material_id=m.id
+                                     WHERE spm.semi_product_id=s.id),0)
+                         + COALESCE((SELECT SUM(spo.labor_cost)
+                                     FROM {SCHEMA}.semi_product_operations spo
+                                     WHERE spo.semi_product_id=s.id),0)
+                       )
+                   ),0) as plan_cost
+            FROM {SCHEMA}.specifications spec
+            LEFT JOIN {SCHEMA}.semi_products s ON s.specification_id=spec.id
+            WHERE spec.finished_product_id = ANY(%s) AND spec.is_active=true
+            GROUP BY spec.finished_product_id, spec.name
+        """, (fp_ids,))
+        for fpid, sname, pcost in cur.fetchall():
+            if fpid in fp_map:
+                fp_map[fpid]["active_spec_name"] = sname
+                fp_map[fpid]["plan_cost"] = float(pcost or 0)
     return rows
 
 
@@ -1865,28 +1897,107 @@ def list_stock_movements(cur, warehouse_id=None, item_type=None, item_id=None, l
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def edit_stock_movement(cur, mv_id, data):
+    """Редактирование движения (поступления): корректирует остаток на разницу."""
+    cur.execute(f"SELECT warehouse_id, item_type, item_id, movement_type, qty FROM {SCHEMA}.stock_movements WHERE id=%s", (mv_id,))
+    old = cur.fetchone()
+    if not old:
+        return None
+    wid, itype, iid, mtype, old_qty = old
+    old_qty = float(old_qty or 0)
+    new_qty = float(data.get("qty", old_qty))
+    new_reason = data.get("reason")
+
+    def signed(t, q):
+        if t in ("in", "return"):
+            return q
+        if t in ("out", "write_off"):
+            return -q
+        return 0
+
+    delta = signed(mtype, new_qty) - signed(mtype, old_qty)
+    cur.execute(
+        f"UPDATE {SCHEMA}.stock_movements SET qty=%s, reason=COALESCE(%s, reason) WHERE id=%s",
+        (new_qty, new_reason, mv_id)
+    )
+    if delta != 0:
+        cur.execute(f"SELECT id FROM {SCHEMA}.stock WHERE warehouse_id=%s AND item_type=%s AND item_id=%s", (wid, itype, iid))
+        ex = cur.fetchone()
+        if ex:
+            cur.execute(f"UPDATE {SCHEMA}.stock SET qty = qty + %s, updated_at=now() WHERE id=%s", (delta, ex[0]))
+        else:
+            cur.execute(f"INSERT INTO {SCHEMA}.stock (warehouse_id, item_type, item_id, qty) VALUES (%s,%s,%s,%s)", (wid, itype, iid, max(0, delta)))
+    return {"ok": True, "id": mv_id}
+
+
+def take_stock_snapshot(cur, snap_date=None):
+    """Сохраняет текущие остатки склада в снимок за указанную дату (по умолчанию сегодня)."""
+    d = _parse_date(snap_date) if snap_date else datetime.now().date()
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.stock_snapshots WHERE snapshot_date=%s", (d,))
+    if cur.fetchone()[0] > 0:
+        return {"ok": True, "date": d.isoformat(), "already": True}
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.stock_snapshots (snapshot_date, warehouse_id, item_type, item_id, qty, reserved_qty)
+        SELECT %s, warehouse_id, item_type, item_id, qty, COALESCE(reserved_qty,0)
+        FROM {SCHEMA}.stock
+    """, (d,))
+    return {"ok": True, "date": d.isoformat(), "created": True}
+
+
+def _auto_daily_snapshot(cur):
+    """Ленивый автоснимок: если сегодня уже 8:00+ и снимок за сегодня не сделан — создать."""
+    now = datetime.now()
+    if now.hour < 8:
+        return
+    today = now.date()
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.stock_snapshots WHERE snapshot_date=%s", (today,))
+    if cur.fetchone()[0] == 0:
+        take_stock_snapshot(cur, today)
+
+
 def report_stock_on_date(cur, on_date, warehouse_id=None, hide_zero=True):
     """Остатки товаров на выбранную дату (включительно), восстановленные из движений.
     Группируется по типам: material, fitting, semi_product, finished.
     Возвращает {date, warehouse_id, sections: [{item_type, label, rows:[...], total_amount}]}."""
     d = _parse_date(on_date) or datetime.now().date()
 
-    params = [d]
-    wh_filter = ""
-    if warehouse_id:
-        wh_filter = " AND sm.warehouse_id = %s"
-        params.append(int(warehouse_id))
+    # автоснимок за сегодня (если уже 8:00+)
+    _auto_daily_snapshot(cur)
 
-    cur.execute(f"""
-        SELECT sm.item_type, sm.item_id,
-               SUM(CASE WHEN sm.movement_type IN ('in','return') THEN sm.qty
-                        WHEN sm.movement_type IN ('out','write_off') THEN -sm.qty
-                        ELSE 0 END) AS qty
-        FROM {SCHEMA}.stock_movements sm
-        WHERE sm.created_at::date <= %s{wh_filter}
-        GROUP BY sm.item_type, sm.item_id
-    """, params)
-    raw = cur.fetchall()
+    # приоритет: если на дату есть сохранённый снимок остатков — берём из него
+    snap_params = [d]
+    snap_wh = ""
+    if warehouse_id:
+        snap_wh = " AND warehouse_id = %s"
+        snap_params.append(int(warehouse_id))
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.stock_snapshots WHERE snapshot_date=%s", (d,))
+    has_snapshot = cur.fetchone()[0] > 0
+    source = "snapshot" if has_snapshot else "movements"
+
+    if has_snapshot:
+        cur.execute(f"""
+            SELECT item_type, item_id, SUM(qty) AS qty
+            FROM {SCHEMA}.stock_snapshots
+            WHERE snapshot_date=%s{snap_wh}
+            GROUP BY item_type, item_id
+        """, snap_params)
+        raw = cur.fetchall()
+    else:
+        params = [d]
+        wh_filter = ""
+        if warehouse_id:
+            wh_filter = " AND sm.warehouse_id = %s"
+            params.append(int(warehouse_id))
+        cur.execute(f"""
+            SELECT sm.item_type, sm.item_id,
+                   SUM(CASE WHEN sm.movement_type IN ('in','return') THEN sm.qty
+                            WHEN sm.movement_type IN ('out','write_off') THEN -sm.qty
+                            ELSE 0 END) AS qty
+            FROM {SCHEMA}.stock_movements sm
+            WHERE sm.created_at::date <= %s{wh_filter}
+            GROUP BY sm.item_type, sm.item_id
+        """, params)
+        raw = cur.fetchall()
 
     type_meta = {
         "material": {"label": "Материалы", "table": "materials", "priced": True},
@@ -1942,6 +2053,7 @@ def report_stock_on_date(cur, on_date, warehouse_id=None, hide_zero=True):
     return {
         "date": d.isoformat(),
         "warehouse_id": int(warehouse_id) if warehouse_id else None,
+        "source": source,
         "sections": result_sections,
     }
 
@@ -2084,6 +2196,18 @@ def list_work_orders(cur, order_id=None, status=None):
         """, (row["id"],))
         oc = [d[0] for d in cur.description]
         row["operations"] = [dict(zip(oc, r)) for r in cur.fetchall()]
+        # задания сотрудникам
+        cur.execute(f"""
+            SELECT t.*, wk.full_name as worker_name
+            FROM {SCHEMA}.work_order_tasks t
+            JOIN {SCHEMA}.workers wk ON t.worker_id = wk.id
+            WHERE t.work_order_id = %s ORDER BY t.created_at
+        """, (row["id"],))
+        tc = [d[0] for d in cur.description]
+        tasks = [dict(zip(tc, r)) for r in cur.fetchall()]
+        row["tasks"] = tasks
+        row["assigned_qty"] = sum(float(t.get("qty") or 0) for t in tasks)
+        row["done_qty"] = sum(float(t.get("qty") or 0) for t in tasks if t.get("status") == "done")
     return rows
 
 
@@ -2136,9 +2260,8 @@ def _assert_composite_available(cur, semi_product_id, qty, warehouse_id):
 
 def _create_single_work_order(cur, order_id, order_item_id, semi_product_id, qty, warehouse_id, overrides=None):
     """Создаёт один заказ-наряд по полуфабрикату + его операции.
-    overrides: список {operation_id, material_id, planned_material_norm, labor_cost} для правки спецификации."""
-    # контроль наличия вложенных п/ф для составного
-    _assert_composite_available(cur, semi_product_id, qty, warehouse_id)
+    overrides: список {operation_id, material_id, planned_material_norm, labor_cost} для правки спецификации.
+    Наличие полуфабрикатов НЕ проверяется при формировании ЗН (проверяется при назначении задания)."""
     num = "ЗН-" + datetime.now().strftime("%y%m%d%H%M%S%f")[:-3]
     cur.execute(
         f"INSERT INTO {SCHEMA}.work_orders (work_order_number, order_id, order_item_id, semi_product_id, qty, warehouse_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
@@ -2195,6 +2318,37 @@ def _create_single_work_order(cur, order_id, order_item_id, semi_product_id, qty
     return wo
 
 
+def _material_shortage_warnings(cur, semi_qty_list, warehouse_id):
+    """Считает нехватку материалов по списку [(semi_product_id, qty)] и возвращает предупреждения (не блокирует)."""
+    need = {}  # material_id -> кол-во
+    for sp_id, sp_qty in semi_qty_list:
+        cur.execute(f"""
+            SELECT spm.material_id, spm.norm_qty
+            FROM {SCHEMA}.semi_product_materials spm
+            WHERE spm.semi_product_id=%s
+        """, (sp_id,))
+        for mat_id, norm in cur.fetchall():
+            need[mat_id] = need.get(mat_id, 0) + float(norm or 0) * float(sp_qty or 1)
+    warnings = []
+    for mat_id, need_qty in need.items():
+        if warehouse_id:
+            cur.execute(f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='material' AND item_id=%s AND warehouse_id=%s", (mat_id, warehouse_id))
+        else:
+            cur.execute(f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='material' AND item_id=%s", (mat_id,))
+        avail = float(cur.fetchone()[0] or 0)
+        if avail < need_qty:
+            cur.execute(f"SELECT name FROM {SCHEMA}.materials WHERE id=%s", (mat_id,))
+            nm = cur.fetchone()
+            warnings.append({
+                "material_id": mat_id,
+                "material_name": nm[0] if nm else f"#{mat_id}",
+                "need": round(need_qty, 3),
+                "available": round(avail, 3),
+                "shortage": round(need_qty - avail, 3),
+            })
+    return warnings
+
+
 def create_work_order(cur, data):
     order_id = data["order_id"]
     _assert_order_period(cur, order_id)
@@ -2230,17 +2384,24 @@ def create_work_order(cur, data):
             semi_ids = [(row[0], float(row[1] or 1)) for row in cur.fetchall()]
 
     created = []
+    used_semi = []
     if explicit_sp:
         created.append(_create_single_work_order(cur, order_id, order_item_id, explicit_sp, qty, warehouse_id, overrides))
+        used_semi.append((explicit_sp, qty))
     elif semi_ids:
         for sp_id, sp_qty in semi_ids:
-            created.append(_create_single_work_order(cur, order_id, order_item_id, sp_id, int(qty * sp_qty), warehouse_id, overrides))
+            wq = int(qty * sp_qty)
+            created.append(_create_single_work_order(cur, order_id, order_item_id, sp_id, wq, warehouse_id, overrides))
+            used_semi.append((sp_id, wq))
     else:
         # у изделия нет состава — создаём ЗН на изделие целиком со всеми операциями
         default_sp = _get_default_semi_product(cur)
         created.append(_create_single_work_order(cur, order_id, order_item_id, default_sp, qty, warehouse_id, overrides))
+        used_semi.append((default_sp, qty))
 
-    return created[0] if len(created) == 1 else {"created": created, "count": len(created)}
+    # предупреждение о нехватке материалов (НЕ блокирует создание ЗН)
+    warnings = _material_shortage_warnings(cur, used_semi, warehouse_id)
+    return {"created": created, "count": len(created), "material_warnings": warnings}
 
 
 def complete_work_order_operation(cur, woo_id, data):
@@ -2274,6 +2435,208 @@ def complete_work_order_operation(cur, woo_id, data):
     else:
         cur.execute(f"UPDATE {SCHEMA}.work_orders SET status='in_progress', updated_at=now() WHERE id=%s", (op["work_order_id"],))
     return op
+
+
+# ========== ЗАДАНИЯ СОТРУДНИКАМ (work_order_tasks) ==========
+def _wo_full(cur, wo_id):
+    cur.execute(f"SELECT id, order_id, order_item_id, semi_product_id, qty, warehouse_id, status FROM {SCHEMA}.work_orders WHERE id=%s", (wo_id,))
+    r = cur.fetchone()
+    if not r:
+        return None
+    return {"id": r[0], "order_id": r[1], "order_item_id": r[2], "semi_product_id": r[3],
+            "qty": float(r[4] or 0), "warehouse_id": r[5], "status": r[6]}
+
+
+def assign_work_order_task(cur, data):
+    """Назначает изготовление N полуфабрикатов сотруднику. Блокирует при нехватке материалов/вложенных ПФ на складе."""
+    wo_id = data.get("work_order_id")
+    worker_id = data.get("worker_id")
+    qty = float(data.get("qty") or 0)
+    if not wo_id or not worker_id or qty <= 0:
+        raise WorkerValidationError("Укажите заказ-наряд, сотрудника и количество")
+    wo = _wo_full(cur, wo_id)
+    if not wo:
+        raise WorkerValidationError("Заказ-наряд не найден")
+    # проверка: не назначить больше, чем в ЗН
+    cur.execute(f"SELECT COALESCE(SUM(qty),0) FROM {SCHEMA}.work_order_tasks WHERE work_order_id=%s", (wo_id,))
+    already = float(cur.fetchone()[0] or 0)
+    if already + qty > wo["qty"] + 1e-9:
+        raise WorkerValidationError(f"Нельзя назначить {qty:g}: в заказ-наряде {wo['qty']:g}, уже назначено {already:g}")
+    sp_id = wo["semi_product_id"]
+    wh = wo["warehouse_id"]
+
+    # блок: наличие материалов на складе под это задание
+    cur.execute(f"SELECT material_id, norm_qty FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (sp_id,))
+    for mat_id, norm in cur.fetchall():
+        need = float(norm or 0) * qty
+        if need <= 0:
+            continue
+        if wh:
+            cur.execute(f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='material' AND item_id=%s AND warehouse_id=%s", (mat_id, wh))
+        else:
+            cur.execute(f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='material' AND item_id=%s", (mat_id,))
+        avail = float(cur.fetchone()[0] or 0)
+        if avail < need:
+            cur.execute(f"SELECT name FROM {SCHEMA}.materials WHERE id=%s", (mat_id,))
+            nm = cur.fetchone()
+            raise WorkerValidationError(f"Недостаточно материала «{nm[0] if nm else mat_id}»: нужно {need:g}, на складе {avail:g}")
+
+    # блок: наличие вложенных ПФ (для составного) под это задание
+    cur.execute(f"SELECT component_id, qty FROM {SCHEMA}.semi_product_components WHERE parent_id=%s", (sp_id,))
+    for comp_id, comp_qty in cur.fetchall():
+        need = float(comp_qty or 1) * qty
+        if wh:
+            cur.execute(f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='semi_product' AND item_id=%s AND warehouse_id=%s", (comp_id, wh))
+        else:
+            cur.execute(f"SELECT COALESCE(SUM(qty - reserved_qty),0) FROM {SCHEMA}.stock WHERE item_type='semi_product' AND item_id=%s", (comp_id,))
+        avail = float(cur.fetchone()[0] or 0)
+        if avail < need:
+            cur.execute(f"SELECT name FROM {SCHEMA}.semi_products WHERE id=%s", (comp_id,))
+            nm = cur.fetchone()
+            raise WorkerValidationError(f"Недостаточно полуфабриката «{nm[0] if nm else comp_id}»: нужно {need:g}, на складе {avail:g}")
+
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.work_order_tasks (work_order_id, worker_id, qty, status) VALUES (%s,%s,%s,'assigned') RETURNING *",
+        (wo_id, worker_id, qty)
+    )
+    if wo["status"] == "pending":
+        cur.execute(f"UPDATE {SCHEMA}.work_orders SET status='in_progress', updated_at=now() WHERE id=%s", (wo_id,))
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, cur.fetchone()))
+
+
+def start_work_order_task(cur, task_id):
+    """Сотрудник начинает выполнение задания (фиксируется время старта)."""
+    cur.execute(f"UPDATE {SCHEMA}.work_order_tasks SET status='in_progress', started_at=now() WHERE id=%s AND status='assigned' RETURNING *", (task_id,))
+    row = cur.fetchone()
+    if not row:
+        raise WorkerValidationError("Задание не найдено или уже выполняется")
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, row))
+
+
+def finish_work_order_task(cur, task_id, data):
+    """Завершение задания: списание материалов, приход ПФ на склад, расчёт ФОТ, авто-готовое изделие."""
+    cur.execute(f"SELECT * FROM {SCHEMA}.work_order_tasks WHERE id=%s", (task_id,))
+    cols = [d[0] for d in cur.description]
+    trow = cur.fetchone()
+    if not trow:
+        raise WorkerValidationError("Задание не найдено")
+    task = dict(zip(cols, trow))
+    if task["status"] == "done":
+        raise WorkerValidationError("Задание уже выполнено")
+    wo = _wo_full(cur, task["work_order_id"])
+    sp_id = wo["semi_product_id"]
+    wh = wo["warehouse_id"]
+    qty = float(task["qty"] or 0)
+
+    # время выполнения
+    started = task.get("started_at")
+    duration = None
+    if started:
+        cur.execute("SELECT EXTRACT(EPOCH FROM (now() - %s))::int", (started,))
+        duration = int(cur.fetchone()[0] or 0)
+
+    # фактический расход материала (сумма) — если передан, иначе по норме
+    actual_material = data.get("actual_material_qty")
+
+    # списываем материалы со склада
+    cur.execute(f"SELECT material_id, norm_qty FROM {SCHEMA}.semi_product_materials WHERE semi_product_id=%s", (sp_id,))
+    mats = cur.fetchall()
+    for mat_id, norm in mats:
+        planned = float(norm or 0) * qty
+        used = float(actual_material) if (actual_material is not None and len(mats) == 1) else planned
+        if used > 0 and wh:
+            stock_movement(cur, {
+                "warehouse_id": wh, "item_type": "material", "item_id": mat_id,
+                "movement_type": "out", "qty": used, "worker_id": task["worker_id"],
+                "reason": f"Расход на ПФ (задание #{task_id})"
+            })
+
+    # списываем вложенные ПФ (для составного)
+    cur.execute(f"SELECT component_id, qty FROM {SCHEMA}.semi_product_components WHERE parent_id=%s", (sp_id,))
+    for comp_id, comp_qty in cur.fetchall():
+        need = float(comp_qty or 1) * qty
+        if need > 0 and wh:
+            stock_movement(cur, {
+                "warehouse_id": wh, "item_type": "semi_product", "item_id": comp_id,
+                "movement_type": "out", "qty": need, "worker_id": task["worker_id"],
+                "reason": f"Расход вложенного ПФ (задание #{task_id})"
+            })
+
+    # приход готового ПФ на склад
+    if wh:
+        stock_movement(cur, {
+            "warehouse_id": wh, "item_type": "semi_product", "item_id": sp_id,
+            "movement_type": "in", "qty": qty, "worker_id": task["worker_id"],
+            "reason": f"Изготовлено (задание #{task_id})"
+        })
+
+    # ФОТ = сумма стоимости операций ПФ × кол-во
+    cur.execute(f"SELECT COALESCE(SUM(labor_cost),0) FROM {SCHEMA}.semi_product_operations WHERE semi_product_id=%s", (sp_id,))
+    op_cost = float(cur.fetchone()[0] or 0)
+    labor_amount = round(op_cost * qty, 2)
+
+    cur.execute(
+        f"UPDATE {SCHEMA}.work_order_tasks SET status='done', finished_at=now(), duration_seconds=%s, actual_material_qty=%s, labor_amount=%s WHERE id=%s",
+        (duration, actual_material, labor_amount, task_id)
+    )
+
+    # если по ЗН всё изготовлено — закрываем ЗН
+    cur.execute(f"SELECT COALESCE(SUM(qty),0) FROM {SCHEMA}.work_order_tasks WHERE work_order_id=%s AND status='done'", (wo["id"],))
+    done_qty = float(cur.fetchone()[0] or 0)
+    if done_qty >= wo["qty"] - 1e-9:
+        cur.execute(f"UPDATE {SCHEMA}.work_orders SET status='completed', updated_at=now() WHERE id=%s", (wo["id"],))
+        _maybe_finish_finished_product(cur, wo)
+
+    return {"ok": True, "labor_amount": labor_amount, "duration_seconds": duration}
+
+
+def _maybe_finish_finished_product(cur, wo):
+    """Если все ЗН позиции заказа завершены — оприходовать готовое изделие на склад ГП."""
+    order_item_id = wo["order_item_id"]
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.work_orders WHERE order_item_id=%s AND status != 'completed'", (order_item_id,))
+    if cur.fetchone()[0] > 0:
+        return
+    cur.execute(f"SELECT finished_product_id, qty FROM {SCHEMA}.order_items WHERE id=%s", (order_item_id,))
+    r = cur.fetchone()
+    if not r:
+        return
+    fp_id, item_qty = r[0], float(r[1] or 1)
+    wh = wo["warehouse_id"]
+    if fp_id and wh:
+        stock_movement(cur, {
+            "warehouse_id": wh, "item_type": "finished", "item_id": fp_id,
+            "movement_type": "in", "qty": item_qty,
+            "reason": f"Готовое изделие по заказу (позиция #{order_item_id})"
+        })
+
+
+def list_worker_payroll(cur, date_from=None, date_to=None, worker_id=None):
+    """ФОТ по сотрудникам за период (по завершённым заданиям)."""
+    sql = f"""
+        SELECT t.worker_id, wk.full_name as worker_name,
+               COUNT(*) as tasks_count,
+               COALESCE(SUM(t.qty),0) as total_qty,
+               COALESCE(SUM(t.labor_amount),0) as total_amount
+        FROM {SCHEMA}.work_order_tasks t
+        JOIN {SCHEMA}.workers wk ON t.worker_id = wk.id
+        WHERE t.status='done'
+    """
+    params = []
+    if date_from:
+        sql += " AND t.finished_at::date >= %s"
+        params.append(date_from)
+    if date_to:
+        sql += " AND t.finished_at::date <= %s"
+        params.append(date_to)
+    if worker_id:
+        sql += " AND t.worker_id=%s"
+        params.append(int(worker_id))
+    sql += " GROUP BY t.worker_id, wk.full_name ORDER BY total_amount DESC"
+    cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def get_pending_operations(cur, worker_id=None):
@@ -2524,6 +2887,8 @@ def handler(event, context):
                 return ok(list_work_orders(cur, qs.get("order_id"), qs.get("status")))
             elif entity == "pending_operations":
                 return ok(get_pending_operations(cur, qs.get("worker_id")))
+            elif entity == "worker_payroll":
+                return ok(list_worker_payroll(cur, qs.get("date_from"), qs.get("date_to"), qs.get("worker_id")))
             elif entity == "report_overconsumption":
                 return ok(report_overconsumption(cur))
             elif entity == "report_cost" and qs.get("order_id"):
@@ -2593,10 +2958,18 @@ def handler(event, context):
                 result = sync_catalog_to_finished(cur)
             elif entity == "stock_movement":
                 result = stock_movement(cur, data)
+            elif entity == "stock_snapshot":
+                result = take_stock_snapshot(cur, data.get("date"))
             elif entity == "orders":
                 result = create_order(cur, data)
             elif entity == "work_orders":
                 result = create_work_order(cur, data)
+            elif entity == "assign_task":
+                result = assign_work_order_task(cur, data)
+            elif entity == "task_start":
+                result = start_work_order_task(cur, int(data["id"]))
+            elif entity == "task_finish":
+                result = finish_work_order_task(cur, int(data["id"]), data)
             elif entity == "complete_operation":
                 result = complete_work_order_operation(cur, int(data["operation_id"]), data)
             elif entity == "worker_perms":
@@ -2642,6 +3015,8 @@ def handler(event, context):
                 result = update_order_status(cur, item_id, data.get("status"))
             elif entity == "orders":
                 result = update_order(cur, item_id, data)
+            elif entity == "stock_movement_edit":
+                result = edit_stock_movement(cur, item_id, data)
             else:
                 return err("Unknown entity for PUT")
             conn.commit()

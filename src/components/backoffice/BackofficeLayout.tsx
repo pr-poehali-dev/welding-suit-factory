@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Дашборд", icon: "LayoutDashboard", path: "/backoffice", module: "dashboard" },
   { label: "Заказы", icon: "ClipboardList", path: "/backoffice/orders", module: "orders" },
   { label: "Производство", icon: "Factory", path: "/backoffice/production", module: "production" },
+  { label: "ФОТ", icon: "Wallet", path: "/backoffice/payroll", module: "reports" },
   { label: "Склад", icon: "Warehouse", path: "/backoffice/stock", module: "stock" },
   { label: "Требования-накладные", icon: "ClipboardCheck", path: "/backoffice/requisitions", module: "stock" },
   {

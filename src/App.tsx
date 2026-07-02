@@ -27,6 +27,7 @@ import FinishedProductsPage from "./pages/backoffice/FinishedProductsPage";
 import StockPage from "./pages/backoffice/StockPage";
 import OrdersPage from "./pages/backoffice/OrdersPage";
 import ProductionPage from "./pages/backoffice/ProductionPage";
+import PayrollPage from "./pages/backoffice/PayrollPage";
 import OverconsumptionReport from "./pages/backoffice/OverconsumptionReport";
 import CostReport from "./pages/backoffice/CostReport";
 import StockOnDateReport from "./pages/backoffice/StockOnDateReport";
@@ -67,6 +68,7 @@ const App = () => (
             <Route path="/backoffice/stock" element={<BO module="stock"><StockPage /></BO>} />
             <Route path="/backoffice/orders" element={<BO module="orders"><OrdersPage /></BO>} />
             <Route path="/backoffice/production" element={<BO module="production"><ProductionPage /></BO>} />
+            <Route path="/backoffice/payroll" element={<BO module="reports"><PayrollPage /></BO>} />
             <Route path="/backoffice/requisitions" element={<BO module="stock"><RequisitionsPage /></BO>} />
             <Route path="/backoffice/reports/stock-on-date" element={<BO module="stock"><StockOnDateReport /></BO>} />
             <Route path="/backoffice/reports/overuse" element={<BO module="stock"><MaterialOveruseReport /></BO>} />

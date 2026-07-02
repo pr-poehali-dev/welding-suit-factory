@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   boFetch,
@@ -107,10 +107,30 @@ export default function OrdersPage() {
       qty: number;
       warehouse_id: number;
       operations?: { operation_id: number; material_id?: number | null; planned_material_norm?: number }[];
-    }) => boFetch("work_orders", "POST", data),
-    onSuccess: () => {
+    }) => boFetch("work_orders", "POST", data).then((res) => ({ res, orderItemId: data.order_item_id })),
+    onSuccess: ({ res, orderItemId }) => {
       qc.invalidateQueries({ queryKey: ["bo-work-orders"] });
-      toast({ title: "Заказ-наряд создан" });
+      const warns: Array<{ material_name: string; need: number; available: number }> =
+        (res as { material_warnings?: Array<{ material_name: string; need: number; available: number }> })?.material_warnings ?? [];
+      if (warns.length > 0) {
+        const prev = materialWarnCount.current[orderItemId] ?? 0;
+        materialWarnCount.current[orderItemId] = prev + 1;
+        const list = warns
+          .map((w) => `${w.material_name}: нужно ${w.need}, есть ${w.available}`)
+          .join("; ");
+        if (prev === 0) {
+          toast({ title: "Заказ-наряд создан", description: `Обратите внимание на материалы — ${list}` });
+        } else {
+          toast({
+            title: "⚠️ НЕ ХВАТАЕТ МАТЕРИАЛОВ!",
+            description: list,
+            variant: "destructive",
+          });
+        }
+      } else {
+        materialWarnCount.current[orderItemId] = 0;
+        toast({ title: "Заказ-наряд создан" });
+      }
     },
     onError: (e: Error) => toast({ title: "Ошибка", description: e.message, variant: "destructive" }),
   });
@@ -148,6 +168,7 @@ export default function OrdersPage() {
   const [woDialogOpen, setWoDialogOpen] = useState(false);
   const [woItem, setWoItem] = useState<OrderItem | null>(null);
   const [woWarehouse, setWoWarehouse] = useState<number>(0);
+  const materialWarnCount = useRef<Record<number, number>>({});
 
   const openWoDialog = (item: OrderItem) => {
     setWoItem(item);

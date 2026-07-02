@@ -403,6 +403,8 @@ export interface FinishedProduct {
   size_label: string | null;
   semi_products: FinishedProductSemi[];
   fittings: FinishedProductFitting[];
+  plan_cost?: number;
+  active_spec_name?: string | null;
 }
 
 // -------------------- склад --------------------
@@ -485,6 +487,21 @@ export interface WorkOrderOperation {
   material_name?: string;
 }
 
+export interface WorkOrderTask {
+  id: number;
+  work_order_id: number;
+  worker_id: number;
+  qty: number;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  actual_material_qty: number | null;
+  duration_seconds: number | null;
+  labor_amount: number;
+  created_at: string;
+  worker_name?: string;
+}
+
 export interface WorkOrder {
   id: number;
   work_order_number: string;
@@ -498,6 +515,17 @@ export interface WorkOrder {
   semi_product_name?: string;
   warehouse_name?: string;
   operations: WorkOrderOperation[];
+  tasks?: WorkOrderTask[];
+  assigned_qty?: number;
+  done_qty?: number;
+}
+
+export interface WorkerPayrollRow {
+  worker_id: number;
+  worker_name: string;
+  tasks_count: number;
+  total_qty: number;
+  total_amount: number;
 }
 
 // -------------------- перерасход --------------------

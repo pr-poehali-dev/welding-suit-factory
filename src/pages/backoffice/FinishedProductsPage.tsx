@@ -253,6 +253,13 @@ export default function FinishedProductsPage() {
                     const max = Math.max(...prices);
                     return min === max ? `${min.toLocaleString("ru")} р.` : `${min.toLocaleString("ru")} — ${max.toLocaleString("ru")} р.`;
                   })();
+                  const costRange = (() => {
+                    const costs = mg.items.map((fp) => Number(fp.plan_cost ?? 0)).filter((c) => c > 0);
+                    if (costs.length === 0) return null;
+                    const min = Math.min(...costs);
+                    const max = Math.max(...costs);
+                    return min === max ? `${min.toLocaleString("ru")} р.` : `${min.toLocaleString("ru")} — ${max.toLocaleString("ru")} р.`;
+                  })();
 
                   return (
                     <div key={mg.key} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
@@ -276,6 +283,7 @@ export default function FinishedProductsPage() {
                         <div className="flex items-center gap-4 text-sm text-slate-500 flex-shrink-0">
                           <span>{mg.items.length} размер{mg.items.length === 1 ? "" : mg.items.length < 5 ? "а" : "ов"}</span>
                           <span className="font-medium text-slate-700">{priceRange}</span>
+                          {costRange && <span className="text-xs bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded" title="Плановая себестоимость по активной спецификации">с/с: {costRange}</span>}
                           {totalSemi > 0 && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">ПФ: {totalSemi}</span>}
                           {totalFit > 0 && <span className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">Ф: {totalFit}</span>}
                         </div>
@@ -299,6 +307,7 @@ export default function FinishedProductsPage() {
                                 <th className="px-4 py-2 pl-12">Размер</th>
                                 <th className="px-4 py-2">Артикул</th>
                                 <th className="px-4 py-2">Цена</th>
+                                <th className="px-4 py-2">Себестоимость</th>
                                 <th className="px-4 py-2">ПФ</th>
                                 <th className="px-4 py-2">Фурнитура</th>
                                 <th className="px-4 py-2">Активен</th>
@@ -313,6 +322,9 @@ export default function FinishedProductsPage() {
                                   </td>
                                   <td className="px-4 py-2 font-mono text-slate-500 text-xs">{fp.sku || "—"}</td>
                                   <td className="px-4 py-2 text-slate-600">{Number(fp.base_price).toLocaleString("ru")} р.</td>
+                                  <td className="px-4 py-2 text-slate-600" title={fp.active_spec_name ? `Спецификация: ${fp.active_spec_name}` : "Нет активной спецификации"}>
+                                    {fp.plan_cost ? `${Number(fp.plan_cost).toLocaleString("ru")} р.` : "—"}
+                                  </td>
                                   <td className="px-4 py-2 text-slate-500">{fp.semi_products?.length ?? 0}</td>
                                   <td className="px-4 py-2 text-slate-500">{fp.fittings?.length ?? 0}</td>
                                   <td className="px-4 py-2">
