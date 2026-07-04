@@ -140,6 +140,7 @@ ENTITY_MODULE = {
     "report_overconsumption": "reports",
     "report_cost": "reports",
     "report_stock_on_date": "stock",
+    "report_material_daily": "stock",
     "report_material_overuse": "stock",
     "requisitions": "stock",
     "requisition_return": "stock",
@@ -2070,6 +2071,103 @@ def report_stock_on_date(cur, on_date, warehouse_id=None, hide_zero=True):
     }
 
 
+def report_material_daily(cur, year=None, month=None, item_type="material", warehouse_id=None):
+    """Статистика изменения количества за месяц по дням для позиций указанного типа склада.
+    Возвращает {year, month, item_type, days, rows:[{item_id, name, unit_short, opening, daily:[{day, in, out, balance}], closing}]}."""
+    import calendar as _cal
+    now = datetime.now()
+    y = int(year) if year else now.year
+    m = int(month) if month else now.month
+    days_in_month = _cal.monthrange(y, m)[1]
+    first = datetime(y, m, 1).date()
+    last = datetime(y, m, days_in_month).date()
+
+    type_meta = {
+        "material": ("materials", True),
+        "fitting": ("fittings", True),
+        "semi_product": ("semi_products", False),
+        "finished": ("finished_products", False),
+    }
+    if item_type not in type_meta:
+        item_type = "material"
+    table, priced = type_meta[item_type]
+
+    wh_filter = ""
+    wh_params = []
+    if warehouse_id:
+        wh_filter = " AND sm.warehouse_id = %s"
+        wh_params.append(int(warehouse_id))
+
+    # остаток на начало месяца (движения до 1-го числа)
+    cur.execute(f"""
+        SELECT sm.item_id,
+               SUM(CASE WHEN sm.movement_type IN ('in','return') THEN sm.qty
+                        WHEN sm.movement_type IN ('out','write_off') THEN -sm.qty
+                        ELSE 0 END) AS qty
+        FROM {SCHEMA}.stock_movements sm
+        WHERE sm.item_type=%s AND sm.created_at::date < %s{wh_filter}
+        GROUP BY sm.item_id
+    """, [item_type, first] + wh_params)
+    opening = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+
+    # движения по дням внутри месяца
+    cur.execute(f"""
+        SELECT sm.item_id, sm.created_at::date as d,
+               SUM(CASE WHEN sm.movement_type IN ('in','return') THEN sm.qty ELSE 0 END) AS d_in,
+               SUM(CASE WHEN sm.movement_type IN ('out','write_off') THEN sm.qty ELSE 0 END) AS d_out
+        FROM {SCHEMA}.stock_movements sm
+        WHERE sm.item_type=%s AND sm.created_at::date >= %s AND sm.created_at::date <= %s{wh_filter}
+        GROUP BY sm.item_id, sm.created_at::date
+    """, [item_type, first, last] + wh_params)
+    moves = {}  # item_id -> {day: (in, out)}
+    for iid, dd, d_in, d_out in cur.fetchall():
+        moves.setdefault(iid, {})[dd.day] = (float(d_in or 0), float(d_out or 0))
+
+    # какие позиции показывать: те, у кого есть остаток или движения
+    item_ids = set(opening.keys()) | set(moves.keys())
+    rows = []
+    for iid in item_ids:
+        if priced:
+            cur.execute(f"SELECT t.name, u.short_name FROM {SCHEMA}.{table} t LEFT JOIN {SCHEMA}.units u ON t.unit_id=u.id WHERE t.id=%s", (iid,))
+        else:
+            cur.execute(f"SELECT t.name, NULL FROM {SCHEMA}.{table} t WHERE t.id=%s", (iid,))
+        r = cur.fetchone()
+        if not r:
+            continue
+        name, unit_short = r[0], (r[1] or "")
+        open_qty = opening.get(iid, 0.0)
+        balance = open_qty
+        daily = []
+        item_moves = moves.get(iid, {})
+        has_movement = bool(item_moves)
+        for day in range(1, days_in_month + 1):
+            d_in, d_out = item_moves.get(day, (0.0, 0.0))
+            balance = balance + d_in - d_out
+            daily.append({
+                "day": day,
+                "in": round(d_in, 3),
+                "out": round(d_out, 3),
+                "balance": round(balance, 3),
+            })
+        rows.append({
+            "item_id": iid,
+            "name": name,
+            "unit_short": unit_short,
+            "opening": round(open_qty, 3),
+            "closing": round(balance, 3),
+            "has_movement": has_movement,
+            "daily": daily,
+        })
+    rows.sort(key=lambda x: x["name"].lower())
+    return {
+        "year": y,
+        "month": m,
+        "item_type": item_type,
+        "days_in_month": days_in_month,
+        "rows": rows,
+    }
+
+
 # ========== ORDERS ==========
 def list_orders(cur, status=None, hide_client=False):
     sql = f"""
@@ -3042,6 +3140,8 @@ def handler(event, context):
             elif entity == "report_stock_on_date":
                 hide_zero = str(qs.get("hide_zero", "1")).lower() not in ("0", "false", "no")
                 return ok(report_stock_on_date(cur, qs.get("date"), qs.get("warehouse_id"), hide_zero))
+            elif entity == "report_material_daily":
+                return ok(report_material_daily(cur, qs.get("year"), qs.get("month"), qs.get("item_type", "material"), qs.get("warehouse_id")))
             elif entity == "requisitions":
                 return ok(list_requisitions(cur, qs.get("worker_id"), qs.get("work_order_id"), qs.get("status")))
             elif entity == "worker_balances":

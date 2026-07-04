@@ -58,6 +58,12 @@ const NAV_ITEMS: NavItem[] = [
         module: "stock",
       },
       {
+        label: "Статистика материалов",
+        icon: "LineChart",
+        path: "/backoffice/reports/material-daily",
+        module: "stock",
+      },
+      {
         label: "Перерасход материалов",
         icon: "TrendingUp",
         path: "/backoffice/reports/overuse",
