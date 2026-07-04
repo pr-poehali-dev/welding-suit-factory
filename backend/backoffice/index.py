@@ -131,9 +131,11 @@ ENTITY_MODULE = {
     "work_orders": "production",
     "complete_operation": "production",
     "pending_operations": "production",
+    "production": "production",
     "assign_task": "production",
     "task_start": "production",
     "task_finish": "production",
+    "item_comment": None,  # комментарии: чтение/добавление всем авторизованным (проверка отдельно)
     "worker_payroll": "reports",
     "report_overconsumption": "reports",
     "report_cost": "reports",
@@ -2092,6 +2094,121 @@ def list_orders(cur, status=None, hide_client=False):
     return rows
 
 
+# ========== ПРОИЗВОДСТВО: иерархия заявка → модели → ЗН, комментарии ==========
+def list_production(cur):
+    """Иерархия для раздела производства: заявки → модели (позиции) → полуфабрикаты (заказ-наряды)."""
+    cur.execute(f"""
+        SELECT o.id, o.order_number, o.status, o.deadline, o.priority, o.notes,
+               c.name as client_name, c.org as client_org
+        FROM {SCHEMA}.orders o
+        LEFT JOIN {SCHEMA}.clients c ON o.client_id = c.id
+        WHERE o.status NOT IN ('cancelled')
+        ORDER BY o.priority DESC, o.deadline ASC NULLS LAST, o.created_at DESC
+    """)
+    cols = [d[0] for d in cur.description]
+    orders = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for o in orders:
+        cur.execute(f"""
+            SELECT oi.id, oi.finished_product_id, oi.qty, oi.notes, fp.name as product_name, fp.size_label
+            FROM {SCHEMA}.order_items oi
+            JOIN {SCHEMA}.finished_products fp ON oi.finished_product_id = fp.id
+            WHERE oi.order_id = %s ORDER BY oi.id
+        """, (o["id"],))
+        ic = [d[0] for d in cur.description]
+        items = [dict(zip(ic, r)) for r in cur.fetchall()]
+        for it in items:
+            # заказ-наряды (полуфабрикаты) по этой модели
+            cur.execute(f"""
+                SELECT wo.id, wo.work_order_number, wo.semi_product_id, wo.qty, wo.status,
+                       wo.warehouse_id, sp.name as semi_product_name, w.name as warehouse_name,
+                       COALESCE((SELECT SUM(t.qty) FROM {SCHEMA}.work_order_tasks t WHERE t.work_order_id=wo.id),0) as assigned_qty,
+                       COALESCE((SELECT SUM(t.qty) FROM {SCHEMA}.work_order_tasks t WHERE t.work_order_id=wo.id AND t.status='done'),0) as done_qty
+                FROM {SCHEMA}.work_orders wo
+                JOIN {SCHEMA}.semi_products sp ON wo.semi_product_id = sp.id
+                LEFT JOIN {SCHEMA}.warehouses w ON wo.warehouse_id = w.id
+                WHERE wo.order_item_id = %s ORDER BY wo.created_at
+            """, (it["id"],))
+            wc = [d[0] for d in cur.description]
+            it["work_orders"] = [dict(zip(wc, r)) for r in cur.fetchall()]
+            # активная спецификация модели
+            cur.execute(f"""
+                SELECT id, name FROM {SCHEMA}.specifications
+                WHERE finished_product_id=%s AND is_active=true LIMIT 1
+            """, (it["finished_product_id"],))
+            sp = cur.fetchone()
+            it["active_spec_id"] = sp[0] if sp else None
+            it["active_spec_name"] = sp[1] if sp else None
+            # комментарии
+            it["comments"] = _load_item_comments(cur, it["id"])
+        o["items"] = items
+    return orders
+
+
+def _load_item_comments(cur, item_id):
+    cur.execute(f"""
+        SELECT c.id, c.order_item_id, c.worker_id, c.author_name, c.text, c.created_at,
+               wk.full_name as worker_full_name
+        FROM {SCHEMA}.order_item_comments c
+        LEFT JOIN {SCHEMA}.workers wk ON c.worker_id = wk.id
+        WHERE c.order_item_id=%s ORDER BY c.created_at
+    """, (item_id,))
+    cc = [d[0] for d in cur.description]
+    return [dict(zip(cc, r)) for r in cur.fetchall()]
+
+
+def add_item_comment(cur, data, user=None):
+    item_id = data.get("order_item_id")
+    text = (data.get("text") or "").strip()
+    if not item_id or not text:
+        raise WorkerValidationError("Укажите позицию и текст комментария")
+    author = (user or {}).get("full_name") if user else data.get("author_name")
+    worker_id = (user or {}).get("id") if user else None
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.order_item_comments (order_item_id, worker_id, author_name, text) VALUES (%s,%s,%s,%s) RETURNING id",
+        (item_id, worker_id, author, text)
+    )
+    cur.fetchone()
+    return {"ok": True, "comments": _load_item_comments(cur, item_id)}
+
+
+def delete_item_comment(cur, comment_id, user=None):
+    cur.execute(f"SELECT order_item_id, worker_id FROM {SCHEMA}.order_item_comments WHERE id=%s", (comment_id,))
+    r = cur.fetchone()
+    if not r:
+        return None
+    cur.execute(f"DELETE FROM {SCHEMA}.order_item_comments WHERE id=%s", (comment_id,))
+    return {"deleted": comment_id, "comments": _load_item_comments(cur, r[0])}
+
+
+def delete_order(cur, oid):
+    """Удаление заказа. Запрещено, если есть выполненные задания или движения склада по его ЗН."""
+    _assert_order_period(cur, oid)
+    cur.execute(f"""
+        SELECT COUNT(*) FROM {SCHEMA}.work_order_tasks t
+        JOIN {SCHEMA}.work_orders wo ON t.work_order_id = wo.id
+        WHERE wo.order_id=%s AND t.status='done'
+    """, (oid,))
+    if cur.fetchone()[0] > 0:
+        raise WorkerValidationError("Нельзя удалить заказ: по нему есть выполненные задания. Отмените заказ вместо удаления.")
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.stock_movements WHERE related_order_id=%s", (oid,))
+    if cur.fetchone()[0] > 0:
+        raise WorkerValidationError("Нельзя удалить заказ: есть связанные движения склада. Отмените заказ вместо удаления.")
+    # каскад: задания → операции ЗН → ЗН → комментарии позиций → позиции → заказ
+    cur.execute(f"SELECT id FROM {SCHEMA}.work_orders WHERE order_id=%s", (oid,))
+    wo_ids = [r[0] for r in cur.fetchall()]
+    for wo_id in wo_ids:
+        cur.execute(f"DELETE FROM {SCHEMA}.work_order_tasks WHERE work_order_id=%s", (wo_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.work_order_operations WHERE work_order_id=%s", (wo_id,))
+    cur.execute(f"DELETE FROM {SCHEMA}.work_orders WHERE order_id=%s", (oid,))
+    cur.execute(f"SELECT id FROM {SCHEMA}.order_items WHERE order_id=%s", (oid,))
+    item_ids = [r[0] for r in cur.fetchall()]
+    for it_id in item_ids:
+        cur.execute(f"DELETE FROM {SCHEMA}.order_item_comments WHERE order_item_id=%s", (it_id,))
+    cur.execute(f"DELETE FROM {SCHEMA}.order_items WHERE order_id=%s", (oid,))
+    cur.execute(f"DELETE FROM {SCHEMA}.orders WHERE id=%s RETURNING id", (oid,))
+    return {"deleted": oid} if cur.fetchone() else None
+
+
 def create_order(cur, data):
     num = data.get("order_number") or ("ЗАК-" + datetime.now().strftime("%y%m%d%H%M%S"))
     cur.execute(
@@ -2889,6 +3006,12 @@ def handler(event, context):
                 return ok(get_pending_operations(cur, qs.get("worker_id")))
             elif entity == "worker_payroll":
                 return ok(list_worker_payroll(cur, qs.get("date_from"), qs.get("date_to"), qs.get("worker_id")))
+            elif entity == "production":
+                if not has_perm(perms, "production.view"):
+                    return err("Недостаточно прав", 403)
+                return ok(list_production(cur))
+            elif entity == "item_comment" and qs.get("order_item_id"):
+                return ok(_load_item_comments(cur, int(qs["order_item_id"])))
             elif entity == "report_overconsumption":
                 return ok(report_overconsumption(cur))
             elif entity == "report_cost" and qs.get("order_id"):
@@ -2972,6 +3095,10 @@ def handler(event, context):
                 result = finish_work_order_task(cur, int(data["id"]), data)
             elif entity == "complete_operation":
                 result = complete_work_order_operation(cur, int(data["operation_id"]), data)
+            elif entity == "item_comment":
+                if not has_perm(perms, "production.view"):
+                    return err("Недостаточно прав", 403)
+                result = add_item_comment(cur, data, user)
             elif entity == "worker_perms":
                 result = save_worker_perms(cur, int(data["worker_id"]), data.get("permissions", []))
             else:
@@ -3032,6 +3159,12 @@ def handler(event, context):
             cascade = str(qs.get("cascade", "") or data.get("cascade", "")).lower() in ("1", "true", "yes")
             if entity == "groups":
                 result = delete_group(cur, item_id, cascade=cascade)
+            elif entity == "orders":
+                result = delete_order(cur, item_id)
+            elif entity == "item_comment":
+                if not has_perm(perms, "production.view"):
+                    return err("Недостаточно прав", 403)
+                result = delete_item_comment(cur, item_id, user)
             elif entity == "finished_products":
                 result = delete_finished_product(cur, item_id)
             elif entity == "specifications":

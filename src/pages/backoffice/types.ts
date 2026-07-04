@@ -528,6 +528,54 @@ export interface WorkerPayrollRow {
   total_amount: number;
 }
 
+export interface ItemComment {
+  id: number;
+  order_item_id: number;
+  worker_id: number | null;
+  author_name: string | null;
+  text: string;
+  created_at: string;
+  worker_full_name?: string | null;
+}
+
+export interface ProductionWorkOrder {
+  id: number;
+  work_order_number: string;
+  semi_product_id: number;
+  qty: number;
+  status: string;
+  warehouse_id: number | null;
+  semi_product_name?: string;
+  warehouse_name?: string;
+  assigned_qty: number;
+  done_qty: number;
+}
+
+export interface ProductionItem {
+  id: number;
+  finished_product_id: number;
+  qty: number;
+  notes: string | null;
+  product_name?: string;
+  size_label?: string | null;
+  work_orders: ProductionWorkOrder[];
+  active_spec_id: number | null;
+  active_spec_name: string | null;
+  comments: ItemComment[];
+}
+
+export interface ProductionOrder {
+  id: number;
+  order_number: string;
+  status: string;
+  deadline: string | null;
+  priority: number;
+  notes: string | null;
+  client_name?: string | null;
+  client_org?: string | null;
+  items: ProductionItem[];
+}
+
 // -------------------- перерасход --------------------
 
 export interface OverconsumptionRow {
