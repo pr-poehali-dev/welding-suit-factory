@@ -543,8 +543,18 @@ class WorkerValidationError(Exception):
     pass
 
 
+def _next_tab_number(cur):
+    """Следующий свободный табельный номер (числовой, последовательный)."""
+    cur.execute(f"SELECT tab_number FROM {SCHEMA}.workers WHERE tab_number ~ '^[0-9]+$'")
+    nums = [int(r[0]) for r in cur.fetchall()]
+    return str((max(nums) + 1) if nums else 1)
+
+
 def _validate_worker(cur, data, wid=None):
     tab = (data.get("tab_number") or "").strip()
+    # при создании номер присваивается автоматически, если не указан
+    if not tab and not wid:
+        tab = _next_tab_number(cur)
     if not tab:
         raise WorkerValidationError("Укажите табельный номер")
     login = (data.get("login") or "").strip() or None
@@ -2209,8 +2219,21 @@ def delete_order(cur, oid):
     return {"deleted": oid} if cur.fetchone() else None
 
 
+def _next_order_number(cur):
+    """Сквозной номер заказа с начала года. Номер выделяется навсегда (при отмене не переиспользуется)."""
+    year = datetime.now().year
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.order_number_counters (year, last_seq) VALUES (%s, 1) "
+        f"ON CONFLICT (year) DO UPDATE SET last_seq = {SCHEMA}.order_number_counters.last_seq + 1 "
+        f"RETURNING last_seq",
+        (year,)
+    )
+    seq = cur.fetchone()[0]
+    return f"{year}-{seq:04d}"
+
+
 def create_order(cur, data):
-    num = data.get("order_number") or ("ЗАК-" + datetime.now().strftime("%y%m%d%H%M%S"))
+    num = data.get("order_number") or _next_order_number(cur)
     cur.execute(
         f"INSERT INTO {SCHEMA}.orders (order_number, client_id, status, manager_name, priority, deadline, total_amount, notes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
         (num, data.get("client_id"), "confirmed", data.get("manager_name"), data.get("priority", 0), data.get("deadline"), data.get("total_amount", 0), data.get("notes"))

@@ -285,7 +285,15 @@ export default function WorkersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">Табельный номер</label>
-                  <Input className="bg-white text-slate-800 border-slate-300" value={form.tab_number ?? ""} onChange={f("tab_number")} />
+                  <Input
+                    className="bg-white text-slate-800 border-slate-300"
+                    value={form.tab_number ?? ""}
+                    onChange={f("tab_number")}
+                    placeholder={form.id ? "" : "Присвоится автоматически"}
+                  />
+                  {!form.id && (
+                    <p className="mt-1 text-xs text-slate-400">Оставьте пустым — номер присвоится автоматически</p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">Телефон</label>
